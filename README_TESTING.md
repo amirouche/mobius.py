@@ -106,28 +106,68 @@ python3 ouverture.py add nonexistent.py@eng
 
 ## Understanding the JSON Output
 
-Each function is stored as JSON with:
+Each function is stored as JSON with support for **multiple languages**:
 
 ```json
 {
   "version": 0,
-  "hash": "da93b591...",
-  "lang": "eng",
+  "hash": "b4f52910...",
   "normalized_code": "def _ouverture_v_0(_ouverture_v_1, _ouverture_v_3):...",
-  "name_mapping": {
-    "_ouverture_v_0": "calculate_sum",
-    "_ouverture_v_1": "first_number",
-    "_ouverture_v_2": "result"
+  "docstrings": {
+    "eng": "Calculate the sum of two numbers.",
+    "fra": "Calculer la somme de deux nombres.",
+    "spa": "Calcular la suma de dos números."
   },
-  "alias_mapping": {}
+  "name_mappings": {
+    "eng": {
+      "_ouverture_v_0": "calculate_sum",
+      "_ouverture_v_1": "first_number",
+      "_ouverture_v_2": "result"
+    },
+    "fra": { ... },
+    "spa": { ... }
+  },
+  "alias_mappings": {
+    "eng": {},
+    "fra": {},
+    "spa": {}
+  }
 }
 ```
 
-- **hash**: SHA256 of the normalized code
-- **lang**: ISO 639-3 language code
-- **normalized_code**: AST unparsed after normalization
-- **name_mapping**: Maps normalized names back to originals
-- **alias_mapping**: Maps ouverture function hashes to their aliases
+Key features:
+
+- **hash**: SHA256 of the normalized code **WITHOUT docstring** (so same logic = same hash)
+- **normalized_code**: AST unparsed after normalization (includes docstring for display)
+- **docstrings**: Language-specific docstrings extracted separately
+- **name_mappings**: Per-language mapping from normalized names to originals
+- **alias_mappings**: Per-language mapping of ouverture function hashes to their aliases
+
+**Important**: The hash is computed on code **without the docstring**. This means:
+- Same function logic in different languages → **same hash**
+- Multiple language versions stored in one JSON file
+- Each language has its own docstring and name mappings
+
+## Testing Multilingual Support
+
+You can add the same function in multiple languages:
+
+```bash
+# Add English version
+python3 ouverture.py add example_simple.py@eng
+
+# Add French version (same logic, different docstring)
+python3 ouverture.py add example_simple_french.py@fra
+
+# Add Spanish version
+python3 ouverture.py add example_simple_spanish.py@spa
+```
+
+All three versions will be stored in the **same JSON file** because they have the same hash (same logic). Check the file to see all three docstrings:
+
+```bash
+find .ouverture/objects -name "*.json" | head -1 | xargs cat | python3 -m json.tool
+```
 
 ## Verify Normalization
 

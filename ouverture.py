@@ -248,16 +248,40 @@ def clear_locations(tree: ast.AST):
             node.end_col_offset = None
 
 
-def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+def extract_docstring(function_def: ast.FunctionDef) -> Tuple[str, ast.FunctionDef]:
+    """
+    Extract docstring from function definition.
+    Returns (docstring, function_without_docstring)
+    """
+    docstring = ast.get_docstring(function_def)
+
+    # Create a copy of the function without the docstring
+    import copy
+    func_copy = copy.deepcopy(function_def)
+
+    # Remove docstring if it exists (first statement is a string constant)
+    if (func_copy.body and
+        isinstance(func_copy.body[0], ast.Expr) and
+        isinstance(func_copy.body[0].value, ast.Constant) and
+        isinstance(func_copy.body[0].value.value, str)):
+        func_copy.body = func_copy.body[1:]
+
+    return docstring if docstring else "", func_copy
+
+
+def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
     """
     Normalize the AST according to ouverture rules.
-    Returns (normalized_code, name_mapping, alias_mapping)
+    Returns (normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping)
     """
     # Sort imports
     tree = sort_imports(tree)
 
     # Extract function and imports
     function_def, imports = extract_function_def(tree)
+
+    # Extract docstring from function
+    docstring, function_without_docstring = extract_docstring(function_def)
 
     # Rewrite ouverture imports
     imports, alias_mapping = rewrite_ouverture_imports(imports)
@@ -268,26 +292,30 @@ def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, Dict[str, str], Dic
     # Create name mapping
     forward_mapping, reverse_mapping = create_name_mapping(function_def, imports, ouverture_aliases)
 
-    # Create new module with just imports and function
-    new_module = ast.Module(body=imports + [function_def], type_ignores=[])
+    # Create two modules: one with docstring (for display) and one without (for hashing)
+    module_with_docstring = ast.Module(body=imports + [function_def], type_ignores=[])
+    module_without_docstring = ast.Module(body=imports + [function_without_docstring], type_ignores=[])
 
-    # Replace ouverture calls with their normalized form
-    new_module = replace_ouverture_calls(new_module, alias_mapping, forward_mapping)
+    # Process both modules identically
+    for module in [module_with_docstring, module_without_docstring]:
+        # Replace ouverture calls with their normalized form
+        module = replace_ouverture_calls(module, alias_mapping, forward_mapping)
 
-    # Normalize names
-    normalizer = ASTNormalizer(forward_mapping)
-    new_module = normalizer.visit(new_module)
+        # Normalize names
+        normalizer = ASTNormalizer(forward_mapping)
+        normalizer.visit(module)
 
-    # Clear locations
-    clear_locations(new_module)
+        # Clear locations
+        clear_locations(module)
 
-    # Fix missing locations
-    ast.fix_missing_locations(new_module)
+        # Fix missing locations
+        ast.fix_missing_locations(module)
 
-    # Unparse
-    normalized_code = ast.unparse(new_module)
+    # Unparse both versions
+    normalized_code_with_docstring = ast.unparse(module_with_docstring)
+    normalized_code_without_docstring = ast.unparse(module_without_docstring)
 
-    return normalized_code, reverse_mapping, alias_mapping
+    return normalized_code_with_docstring, normalized_code_without_docstring, docstring, reverse_mapping, alias_mapping
 
 
 def compute_hash(code: str) -> str:
@@ -295,7 +323,7 @@ def compute_hash(code: str) -> str:
     return hashlib.sha256(code.encode('utf-8')).hexdigest()
 
 
-def save_function(hash_value: str, lang: str, normalized_code: str,
+def save_function(hash_value: str, lang: str, normalized_code: str, docstring: str,
                   name_mapping: Dict[str, str], alias_mapping: Dict[str, str]):
     """Save the function to the ouverture objects directory"""
     # Create directory structure: .ouverture/objects/XX/
@@ -303,23 +331,34 @@ def save_function(hash_value: str, lang: str, normalized_code: str,
     hash_dir = objects_dir / hash_value[:2]
     hash_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create JSON file
+    # Create JSON file path
     json_path = hash_dir / f'{hash_value[2:]}.json'
 
-    data = {
-        'version': 0,
-        'hash': hash_value,
-        'lang': lang,
-        'normalized_code': normalized_code,
-        'name_mapping': name_mapping,
-        'alias_mapping': alias_mapping
-    }
+    # Check if file exists and load existing data
+    if json_path.exists():
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    else:
+        data = {
+            'version': 0,
+            'hash': hash_value,
+            'normalized_code': normalized_code,
+            'docstrings': {},
+            'name_mappings': {},
+            'alias_mappings': {}
+        }
+
+    # Add language-specific data
+    data['docstrings'][lang] = docstring
+    data['name_mappings'][lang] = name_mapping
+    data['alias_mappings'][lang] = alias_mapping
 
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
     print(f"Function saved: {json_path}")
     print(f"Hash: {hash_value}")
+    print(f"Language: {lang}")
 
 
 def add_function(file_path_with_lang: str):
@@ -353,16 +392,16 @@ def add_function(file_path_with_lang: str):
 
     # Normalize the AST
     try:
-        normalized_code, name_mapping, alias_mapping = normalize_ast(tree, lang)
+        normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping = normalize_ast(tree, lang)
     except Exception as e:
         print(f"Error: Failed to normalize AST: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Compute hash
-    hash_value = compute_hash(normalized_code)
+    # Compute hash on code WITHOUT docstring (so same logic = same hash regardless of language)
+    hash_value = compute_hash(normalized_code_without_docstring)
 
-    # Save to JSON
-    save_function(hash_value, lang, normalized_code, name_mapping, alias_mapping)
+    # Save to JSON (store the version WITH docstring for display purposes)
+    save_function(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping)
 
 
 def main():
