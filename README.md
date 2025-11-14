@@ -213,6 +213,7 @@ MIT (see LICENSE file)
 
 ## Related Work
 
+- **Non-English-based programming languages**: [Wikipedia overview](https://en.wikipedia.org/wiki/Non-English-based_programming_languages) of programming languages designed for non-English speakers
 - Content-addressed storage: Git, IPFS
 - AST-based code similarity: Moss, JPlag
 - Multilingual programming: Racket's #lang system, Babylonian programming
