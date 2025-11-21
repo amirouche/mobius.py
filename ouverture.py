@@ -10,7 +10,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Set, Tuple, List
+from typing import Dict, Set, Tuple, List, Union
 
 
 # Get all Python built-in names
@@ -44,6 +44,13 @@ class ASTNormalizer(ast.NodeTransformer):
         self.generic_visit(node)
         return node
 
+    def visit_AsyncFunctionDef(self, node):
+        """Handle async function definitions the same as regular functions"""
+        if node.name in self.name_mapping:
+            node.name = self.name_mapping[node.name]
+        self.generic_visit(node)
+        return node
+
 
 def names_collect(tree: ast.Module) -> Set[str]:
     """Collect all names (variables, functions) used in the AST"""
@@ -52,7 +59,7 @@ def names_collect(tree: ast.Module) -> Set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
             names.add(node.id)
-        elif isinstance(node, ast.FunctionDef):
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             names.add(node.name)
             for arg in node.args.args:
                 names.add(arg.arg)
@@ -116,15 +123,15 @@ def imports_sort(tree: ast.Module) -> ast.Module:
     return tree
 
 
-def function_extract_definition(tree: ast.Module) -> Tuple[ast.FunctionDef, List[ast.stmt]]:
-    """Extract the function definition and import statements"""
+def function_extract_definition(tree: ast.Module) -> Tuple[Union[ast.FunctionDef, ast.AsyncFunctionDef], List[ast.stmt]]:
+    """Extract the function definition (sync or async) and import statements"""
     imports = []
     function_def = None
 
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             imports.append(node)
-        elif isinstance(node, ast.FunctionDef):
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if function_def is not None:
                 raise ValueError("Only one function definition is allowed per file")
             function_def = node
@@ -135,7 +142,7 @@ def function_extract_definition(tree: ast.Module) -> Tuple[ast.FunctionDef, List
     return function_def, imports
 
 
-def mapping_create_name(function_def: ast.FunctionDef, imports: List[ast.stmt],
+def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef], imports: List[ast.stmt],
                         ouverture_aliases: Set[str] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Create mapping from original names to normalized names.
@@ -275,9 +282,9 @@ def ast_clear_locations(tree: ast.AST):
             node.end_col_offset = None
 
 
-def docstring_extract(function_def: ast.FunctionDef) -> Tuple[str, ast.FunctionDef]:
+def docstring_extract(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Tuple[str, Union[ast.FunctionDef, ast.AsyncFunctionDef]]:
     """
-    Extract docstring from function definition.
+    Extract docstring from function definition (sync or async).
     Returns (docstring, function_without_docstring)
     """
     docstring = ast.get_docstring(function_def)
@@ -799,6 +806,13 @@ def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_m
 
         def visit_FunctionDef(self, node):
             # Replace normalized function name
+            if node.name in name_mapping:
+                node.name = name_mapping[node.name]
+            self.generic_visit(node)
+            return node
+
+        def visit_AsyncFunctionDef(self, node):
+            # Replace normalized async function name
             if node.name in name_mapping:
                 node.name = name_mapping[node.name]
             self.generic_visit(node)
@@ -1777,10 +1791,10 @@ def docstring_replace(code: str, new_docstring: str) -> str:
     """
     tree = ast.parse(code)
 
-    # Find the function definition
+    # Find the function definition (sync or async)
     function_def = None
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function_def = node
             break
 
@@ -2620,7 +2634,7 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
     # First, extract the code without docstring
     new_tree = ast.parse(new_normalized_code)
     for node in new_tree.body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             _, func_without_docstring = docstring_extract(node)
             # Rebuild module without docstring for hashing
             imports = [n for n in new_tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
