@@ -561,7 +561,7 @@ def calculate_sum(first, second):
 
     assert "_ouverture_v_0" in code_with_doc  # Function name normalized
     assert docstring == "Add two numbers"
-    assert "_ouverture_v_0" in name_mapping.values()
+    assert "_ouverture_v_0" in name_mapping.keys()
     assert code_without_doc != code_with_doc  # Should differ by docstring
 
 
