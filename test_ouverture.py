@@ -1199,3 +1199,230 @@ def test_hash_compute_algorithm_deterministic():
     hash2 = ouverture.hash_compute(code, algorithm='sha256')
 
     assert hash1 == hash2
+
+
+# ============================================================================
+# Tests for Phase 2: V1 Write Path (Schema v1)
+# ============================================================================
+
+def test_function_save_v1_creates_object_json(mock_ouverture_dir):
+    """Test that function_save_v1 creates proper object.json"""
+    test_hash = "abcd1234" + "0" * 56
+    normalized_code = "def _ouverture_v_0(): pass"
+    metadata = {
+        'created': '2025-01-01T00:00:00Z',
+        'author': 'testuser',
+        'tags': ['test'],
+        'dependencies': []
+    }
+
+    ouverture.function_save_v1(test_hash, normalized_code, metadata)
+
+    # Check that object.json was created
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    func_dir = objects_dir / test_hash[:2] / test_hash[2:]
+    object_json = func_dir / 'object.json'
+
+    assert object_json.exists()
+
+    # Load and verify structure
+    with open(object_json, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    assert data['schema_version'] == 1
+    assert data['hash'] == test_hash
+    assert data['hash_algorithm'] == 'sha256'
+    assert data['normalized_code'] == normalized_code
+    assert data['encoding'] == 'none'
+    assert data['metadata'] == metadata
+
+
+def test_function_save_v1_no_language_data(mock_ouverture_dir):
+    """Test that function_save_v1 does NOT include language-specific data"""
+    test_hash = "abcd1234" + "0" * 56
+    normalized_code = "def _ouverture_v_0(): pass"
+    metadata = ouverture.metadata_create()
+
+    ouverture.function_save_v1(test_hash, normalized_code, metadata)
+
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    func_dir = objects_dir / test_hash[:2] / test_hash[2:]
+    object_json = func_dir / 'object.json'
+
+    with open(object_json, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    # Should NOT have docstrings, name_mappings, alias_mappings
+    assert 'docstrings' not in data
+    assert 'name_mappings' not in data
+    assert 'alias_mappings' not in data
+
+
+def test_mapping_save_v1_creates_mapping_json(mock_ouverture_dir):
+    """Test that mapping_save_v1 creates proper mapping.json"""
+    func_hash = "abcd1234" + "0" * 56
+    lang = "eng"
+    docstring = "Test function"
+    name_mapping = {"_ouverture_v_0": "test_func"}
+    alias_mapping = {}
+    comment = "Test variant"
+
+    # First create the function (object.json must exist)
+    normalized_code = "def _ouverture_v_0(): pass"
+    metadata = ouverture.metadata_create()
+    ouverture.function_save_v1(func_hash, normalized_code, metadata)
+
+    # Now save the mapping
+    mapping_hash = ouverture.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment)
+
+    # Check that mapping.json was created
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    func_dir = objects_dir / func_hash[:2] / func_hash[2:]
+    mapping_dir = func_dir / lang / mapping_hash[:2] / mapping_hash[2:]
+    mapping_json = mapping_dir / 'mapping.json'
+
+    assert mapping_json.exists()
+
+    # Load and verify structure
+    with open(mapping_json, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    assert data['docstring'] == docstring
+    assert data['name_mapping'] == name_mapping
+    assert data['alias_mapping'] == alias_mapping
+    assert data['comment'] == comment
+
+
+def test_mapping_save_v1_returns_hash(mock_ouverture_dir):
+    """Test that mapping_save_v1 returns the mapping hash"""
+    func_hash = "abcd1234" + "0" * 56
+    lang = "eng"
+    docstring = "Test"
+    name_mapping = {"_ouverture_v_0": "test"}
+    alias_mapping = {}
+    comment = ""
+
+    # Create function first
+    ouverture.function_save_v1(func_hash, "def _ouverture_v_0(): pass", ouverture.metadata_create())
+
+    # Save mapping
+    mapping_hash = ouverture.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment)
+
+    # Verify it's a valid hash
+    assert len(mapping_hash) == 64
+    assert all(c in '0123456789abcdef' for c in mapping_hash)
+
+    # Verify it matches computed hash
+    expected_hash = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+    assert mapping_hash == expected_hash
+
+
+def test_mapping_save_v1_deduplication(mock_ouverture_dir):
+    """Test that identical mappings share the same file (deduplication)"""
+    func_hash1 = "aaaa" + "0" * 60
+    func_hash2 = "bbbb" + "0" * 60
+    lang = "eng"
+    docstring = "Identical docstring"
+    name_mapping = {"_ouverture_v_0": "identical"}
+    alias_mapping = {}
+    comment = "Same comment"
+
+    # Create two different functions
+    ouverture.function_save_v1(func_hash1, "def _ouverture_v_0(): pass", ouverture.metadata_create())
+    ouverture.function_save_v1(func_hash2, "def _ouverture_v_0(): return 42", ouverture.metadata_create())
+
+    # Save identical mappings for both
+    mapping_hash1 = ouverture.mapping_save_v1(func_hash1, lang, docstring, name_mapping, alias_mapping, comment)
+    mapping_hash2 = ouverture.mapping_save_v1(func_hash2, lang, docstring, name_mapping, alias_mapping, comment)
+
+    # Hashes should be identical
+    assert mapping_hash1 == mapping_hash2
+
+    # Both should point to the same mapping file
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+
+    mapping_dir1 = objects_dir / func_hash1[:2] / func_hash1[2:] / lang / mapping_hash1[:2] / mapping_hash1[2:]
+    mapping_dir2 = objects_dir / func_hash2[:2] / func_hash2[2:] / lang / mapping_hash2[:2] / mapping_hash2[2:]
+
+    # Both mapping.json files should exist
+    assert (mapping_dir1 / 'mapping.json').exists()
+    assert (mapping_dir2 / 'mapping.json').exists()
+
+    # And they should have identical content
+    with open(mapping_dir1 / 'mapping.json', 'r', encoding='utf-8') as f1:
+        data1 = json.load(f1)
+    with open(mapping_dir2 / 'mapping.json', 'r', encoding='utf-8') as f2:
+        data2 = json.load(f2)
+
+    assert data1 == data2
+
+
+def test_mapping_save_v1_different_comments_different_hashes(mock_ouverture_dir):
+    """Test that different comments produce different mapping hashes"""
+    func_hash = "abcd1234" + "0" * 56
+    lang = "eng"
+    docstring = "Test"
+    name_mapping = {"_ouverture_v_0": "test"}
+    alias_mapping = {}
+
+    # Create function
+    ouverture.function_save_v1(func_hash, "def _ouverture_v_0(): pass", ouverture.metadata_create())
+
+    # Save two mappings with different comments
+    hash1 = ouverture.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, "Formal")
+    hash2 = ouverture.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, "Informal")
+
+    # Hashes should be different
+    assert hash1 != hash2
+
+
+def test_v1_write_integration_full_structure(mock_ouverture_dir):
+    """Integration test: verify complete v1 directory structure"""
+    func_hash = "test1234" + "0" * 56
+    normalized_code = "def _ouverture_v_0(_ouverture_v_1):\n    return _ouverture_v_1 * 2"
+    metadata = {
+        'created': '2025-01-01T00:00:00Z',
+        'author': 'testuser',
+        'tags': ['math'],
+        'dependencies': []
+    }
+
+    # Save function
+    ouverture.function_save_v1(func_hash, normalized_code, metadata)
+
+    # Save mappings in two languages
+    eng_hash = ouverture.mapping_save_v1(
+        func_hash, "eng",
+        "Double the input",
+        {"_ouverture_v_0": "double", "_ouverture_v_1": "value"},
+        {},
+        "Simple English"
+    )
+
+    fra_hash = ouverture.mapping_save_v1(
+        func_hash, "fra",
+        "Doubler l'entrée",
+        {"_ouverture_v_0": "doubler", "_ouverture_v_1": "valeur"},
+        {},
+        "Français simple"
+    )
+
+    # Verify directory structure
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    func_dir = objects_dir / func_hash[:2] / func_hash[2:]
+
+    # Check object.json exists
+    assert (func_dir / 'object.json').exists()
+
+    # Check language directories exist
+    assert (func_dir / 'eng').exists()
+    assert (func_dir / 'fra').exists()
+
+    # Check mapping files exist
+    assert (func_dir / 'eng' / eng_hash[:2] / eng_hash[2:] / 'mapping.json').exists()
+    assert (func_dir / 'fra' / fra_hash[:2] / fra_hash[2:] / 'mapping.json').exists()
