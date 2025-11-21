@@ -1635,7 +1635,8 @@ def test_schema_migrate_function_v0_to_v1_basic(mock_ouverture_dir):
     """Test basic function migration from v0 to v1"""
     func_hash = "migrate01" + "0" * 56
     lang = "eng"
-    normalized_code = "def _ouverture_v_0(): return 42"
+    # Use realistic normalized code (output of ast.unparse after ast.parse)
+    normalized_code = "def _ouverture_v_0():\n    return 42"
     docstring = "Return 42"
     name_mapping = {"_ouverture_v_0": "get_answer"}
     alias_mapping = {}
@@ -1667,7 +1668,8 @@ def test_schema_migrate_function_v0_to_v1_delete_v0(mock_ouverture_dir):
     """Test migration with v0 deletion"""
     func_hash = "migrate02" + "0" * 56
     lang = "eng"
-    normalized_code = "def _ouverture_v_0(): return 100"
+    # Use realistic normalized code (output of ast.unparse after ast.parse)
+    normalized_code = "def _ouverture_v_0():\n    return 100"
     docstring = "Return 100"
     name_mapping = {"_ouverture_v_0": "get_hundred"}
     alias_mapping = {}
@@ -1698,7 +1700,8 @@ def test_schema_migrate_function_v0_to_v1_delete_v0(mock_ouverture_dir):
 def test_schema_migrate_function_v0_to_v1_multiple_languages(mock_ouverture_dir):
     """Test migration with multiple languages"""
     func_hash = "migrate03" + "0" * 56
-    normalized_code = "def _ouverture_v_0(): return 50"
+    # Use realistic normalized code (output of ast.unparse after ast.parse)
+    normalized_code = "def _ouverture_v_0():\n    return 50"
 
     # Create v0 function with two languages
     ouverture.function_save_v0(func_hash, "eng", normalized_code, "English doc", {"_ouverture_v_0": "fifty"}, {})
@@ -1722,10 +1725,10 @@ def test_schema_migrate_function_v0_to_v1_multiple_languages(mock_ouverture_dir)
 
 def test_schema_migrate_all_v0_to_v1(mock_ouverture_dir):
     """Test migrating all v0 functions at once"""
-    # Create three v0 functions
+    # Create three v0 functions with realistic normalized code
     for i in range(3):
         func_hash = f"migrall{i}" + "0" * 56
-        ouverture.function_save_v0(func_hash, "eng", "def _ouverture_v_0(): pass", f"Doc {i}", {"_ouverture_v_0": f"func{i}"}, {})
+        ouverture.function_save_v0(func_hash, "eng", "def _ouverture_v_0():\n    pass", f"Doc {i}", {"_ouverture_v_0": f"func{i}"}, {})
 
     # Migrate all
     ouverture.schema_migrate_all_v0_to_v1(keep_v0=False, dry_run=False)
