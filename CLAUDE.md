@@ -129,22 +129,141 @@ $HOME/.local/ouverture/
 - Transforms: `alias(...)` → `HASH._ouverture_v_0(...)`
 - Uses alias_mapping to determine which names are ouverture functions
 
-#### `hash_compute(code)` (lines 321-323)
-**Generates SHA256 hash**
+#### `hash_compute(code, algorithm='sha256')` (lines 321-335)
+**Generates hash using specified algorithm**
 - CRITICAL: Hash computed on code **WITHOUT docstring**
 - Ensures same logic = same hash across languages
+- **algorithm** parameter supports future hash algorithms (currently only 'sha256')
+- Default algorithm: 'sha256' (64-character hex output)
 
-#### `function_save(hash_value, lang, ...)` (lines 326-362)
-**Stores function in content-addressed pool**
+#### `mapping_compute_hash(docstring, name_mapping, alias_mapping, comment='')` (lines 338-371)
+**Computes content-addressed hash for language mappings** (Schema v1)
+- Creates canonical JSON from mapping components (sorted keys, no whitespace)
+- Includes comment field in hash to distinguish variants
+- Enables deduplication: identical mappings share same hash/storage
+- Returns: 64-character hex SHA256 hash
+
+#### `schema_detect_version(func_hash)` (lines 374-406)
+**Detects schema version of stored function**
+- Checks filesystem to determine v0 or v1 format
+- v0: `XX/YYYYYY.json` (single JSON file)
+- v1: `XX/YYYYYY.../object.json` (directory with object.json)
+- Returns: 0 (v0), 1 (v1), or None (not found)
+- Used for backward-compatible reading
+
+#### `metadata_create()` (lines 409-435)
+**Generates default metadata for functions** (Schema v1)
+- ISO 8601 timestamp (`created` field)
+- Author from environment (USER or USERNAME)
+- Empty `tags` and `dependencies` lists
+- Returns: Dictionary with metadata structure
+- Used when saving functions to v1 format
+
+#### `function_save_v0(hash_value, lang, ...)` (lines 451-493)
+**Stores function in content-addressed pool** (Schema v0 - legacy)
 - Path: `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/ouverture/`, XX = first 2 chars of hash)
 - Merges with existing data if hash already exists
 - Stores per-language: docstrings, name_mappings, alias_mappings
+- **Note**: Kept for migration tool and backward compatibility. New code should use v1 functions.
 
-#### `code_denormalize(normalized_code, name_mapping, alias_mapping)` (lines 364-429)
+#### `function_save_v1(hash_value, normalized_code, metadata)` (lines 495-532)
+**Stores function in v1 format** (Schema v1)
+- Creates function directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../`
+- Writes `object.json` with schema_version=1, hash_algorithm, encoding, metadata
+- Does NOT store language-specific data (stored separately in mapping files)
+- Clean separation: code in object.json, language variants in mapping.json files
+
+#### `mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment='')` (lines 534-585)
+**Stores language mapping in v1 format** (Schema v1)
+- Creates mapping directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../`
+- Writes `mapping.json` with docstring, name_mapping, alias_mapping, comment
+- Content-addressed by mapping hash (enables deduplication)
+- Identical mappings across functions share same file
+- Returns: mapping hash for verification
+
+#### `function_save(hash_value, lang, normalized_code, docstring, name_mapping, alias_mapping, comment='')` (lines 471-494)
+**Main entry point for saving functions** (Schema v1)
+- Wrapper that calls function_save_v1() + mapping_save_v1()
+- Creates metadata automatically using metadata_create()
+- Accepts optional comment parameter for mapping variant identification
+- **This is the default save function** - all new code uses v1 format
+
+#### `function_load_v0(hash_value, lang)` (lines 772-813)
+**Loads function from pool using schema v0** (Legacy)
+- Kept for backward compatibility with v0 format
+- Reads single JSON file: `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json`
+- Returns: (normalized_code, name_mapping, alias_mapping, docstring)
+- **Note**: Use function_load() which auto-detects v0/v1
+
+#### `function_load_v1(hash_value)` (lines 816-848)
+**Loads function from pool using schema v1**
+- Reads object.json: `$OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json`
+- Returns: Dictionary with schema_version, hash, hash_algorithm, normalized_code, encoding, metadata
+- Does NOT load language-specific data (use mapping functions for that)
+
+#### `mappings_list_v1(func_hash, lang)` (lines 851-909)
+**Lists all mapping variants for a language** (Schema v1)
+- Scans language directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/`
+- Returns: List of (mapping_hash, comment) tuples
+- Used to discover available mapping variants
+- Returns empty list if language doesn't exist
+
+#### `mapping_load_v1(func_hash, lang, mapping_hash)` (lines 912-950)
+**Loads specific language mapping** (Schema v1)
+- Reads mapping.json: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json`
+- Returns: Tuple of (docstring, name_mapping, alias_mapping, comment)
+- Content-addressed storage enables deduplication
+
+#### `function_load(hash_value, lang, mapping_hash=None)` (lines 953-1011)
+**Main entry point for loading functions** (Dispatches to v0 or v1)
+- Detects schema version using schema_detect_version()
+- If v0: Routes to function_load_v0() for backward compatibility
+- If v1: Routes to function_load_v1() + mapping_load_v1()
+- If multiple v1 mappings exist and no mapping_hash specified, picks first alphabetically
+- Returns: Tuple of (normalized_code, name_mapping, alias_mapping, docstring)
+- **This is the default load function** - auto-detects format
+
+#### `function_show(hash_with_lang_and_mapping)` (lines 1014-1107)
+**Show function with mapping exploration and selection** (Phase 5)
+- Supports three formats: `HASH@LANG`, `HASH@LANG@MAPPING_HASH`
+- Single mapping: Outputs code directly to stdout
+- Multiple mappings: Displays selection menu with copyable commands and comments
+- Explicit mapping hash: Directly outputs specified mapping
+- V0 backward compatible: Automatically handles v0 format (single mapping per language)
+- Uses function_load() + code_denormalize() to reconstruct original code
+- **This is the recommended command** for exploring and viewing functions
+- **Note**: CLI command `ouverture.py show HASH@lang[@mapping_hash]`
+
+#### `code_denormalize(normalized_code, name_mapping, alias_mapping)` (lines 497-679)
 **Reconstructs original-looking code**
 - Reverses variable renaming: `_ouverture_v_X → original_name`
 - Rewrites imports: `from ouverture.pool import X` → `from ouverture.pool import X as alias` (restores alias)
 - Transforms calls: `HASH._ouverture_v_0(...)` → `alias(...)`
+
+#### `schema_migrate_function_v0_to_v1(func_hash, keep_v0=False)` (lines 1054-1118)
+**Migrate single function from v0 to v1** (Schema Migration)
+- Loads v0 data from single JSON file
+- Creates v1 object.json with metadata
+- Migrates each language mapping to separate mapping.json files
+- Validates migration before completion
+- Optionally deletes v0 file (default: delete)
+- **Note**: CLI command `ouverture.py migrate HASH [--keep-v0]`
+
+#### `schema_migrate_all_v0_to_v1(keep_v0=False, dry_run=False)` (lines 1121-1172)
+**Migrate all v0 functions to v1** (Schema Migration)
+- Scans objects directory for v0 files
+- Migrates each function using schema_migrate_function_v0_to_v1()
+- Supports dry-run mode (shows what would be migrated)
+- Returns list of migrated function hashes
+- **Note**: CLI command `ouverture.py migrate [--keep-v0] [--dry-run]`
+
+#### `schema_validate_v1(func_hash)` (lines 1175-1239)
+**Validate v1 function structure** (Schema Validation)
+- Checks object.json exists and has required fields
+- Verifies at least one language mapping exists
+- Validates schema_version is 1
+- Returns tuple of (is_valid, errors)
+- **Note**: CLI command `ouverture.py validate HASH`
 
 ### Storage Schema
 
@@ -178,17 +297,27 @@ Functions are stored in `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json` (default: 
 - Mappings stored inline (no deduplication)
 - Limited extensibility
 
-#### Future Schema (v1) - Planned
+#### Future Schema (v1) - Implemented
 
 See `TODO.md` Priority 0 for the comprehensive redesign plan.
 
 **Directory Structure:**
 ```
-$OUVERTURE_DIRECTORY/objects/  # Default: $HOME/.local/ouverture/objects/
-  ab/c123def456.../              # Function directory
-    object.json                  # Core function data (no language data)
-    eng/xy/z789.../mapping.json  # Language mapping (content-addressed)
-    fra/mn/opqr.../mapping.json  # Another language/variant
+$OUVERTURE_DIRECTORY/objects/         # Default: $HOME/.local/ouverture/objects/
+  sha256/                             # Hash algorithm name
+    ab/                               # First 2 chars of function hash
+      c123def456.../                  # Function directory (remaining hash chars)
+        object.json                   # Core function data (no language data)
+        eng/                          # Language code directory
+          sha256/                     # Hash algorithm for mapping
+            xy/                       # First 2 chars of mapping hash
+              z789.../                # Mapping directory (remaining hash chars)
+                mapping.json          # Language mapping (content-addressed)
+        fra/                          # Another language
+          sha256/
+            mn/
+              opqr.../
+                mapping.json          # Another language/variant
 ```
 
 **object.json** (minimal - no duplication):
@@ -250,12 +379,13 @@ ouverture.py remote push NAME                       # Publish functions to remot
 
 #### Function Operations
 ```bash
-ouverture.py add FILENAME.py@LANG              # Add function to local pool
-ouverture.py get HASH[@LANG] FILENAME.py       # Retrieve function and save to file (in specific language)
-ouverture.py translate HASH@LANG LANG          # Add translation for existing function
-ouverture.py review HASH                       # Recursively review function and dependencies (in user's languages)
-ouverture.py run HASH@lang                     # Execute function interactively
-ouverture.py run HASH@lang --debug             # Execute with debugger (native language variables)
+ouverture.py add FILENAME.py@LANG                      # Add function to local pool
+ouverture.py show HASH@LANG[@MAPPING_HASH]             # Show function with mapping exploration (recommended)
+ouverture.py get HASH[@LANG] FILENAME.py               # Retrieve function and save to file (in specific language)
+ouverture.py translate HASH@LANG LANG                  # Add translation for existing function
+ouverture.py review HASH                               # Recursively review function and dependencies (in user's languages)
+ouverture.py run HASH@lang                             # Execute function interactively
+ouverture.py run HASH@lang --debug                     # Execute with debugger (native language variables)
 ```
 
 #### Discovery
@@ -266,7 +396,10 @@ ouverture.py search [NAME | URL] [QUERY...]    # Search and list functions by qu
 
 **Currently implemented**:
 - `add` command: Parses file, normalizes AST, computes hash, saves to local pool
+- `show` command: Shows function with mapping exploration and selection (v0 and v1 compatible)
 - `get` command: Retrieves function from local pool, denormalizes to target language
+- `migrate` command: Migrates functions from v0 to v1 schema format
+- `validate` command: Validates v1 function structure
 
 **Language codes**: Currently 3 characters (ISO 639-3: eng, fra, spa, etc.), future support for any string <256 chars
 

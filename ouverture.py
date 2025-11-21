@@ -318,9 +318,121 @@ def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
     return normalized_code_with_docstring, normalized_code_without_docstring, docstring, reverse_mapping, alias_mapping
 
 
-def hash_compute(code: str) -> str:
-    """Compute SHA256 hash of the code"""
-    return hashlib.sha256(code.encode('utf-8')).hexdigest()
+def hash_compute(code: str, algorithm: str = 'sha256') -> str:
+    """
+    Compute hash of the code using specified algorithm.
+
+    Args:
+        code: The code to hash
+        algorithm: Hash algorithm to use (default: 'sha256')
+
+    Returns:
+        Hex string of the hash
+    """
+    if algorithm == 'sha256':
+        return hashlib.sha256(code.encode('utf-8')).hexdigest()
+    else:
+        raise ValueError(f"Unsupported hash algorithm: {algorithm}")
+
+
+def mapping_compute_hash(docstring: str, name_mapping: Dict[str, str],
+                        alias_mapping: Dict[str, str], comment: str = "") -> str:
+    """
+    Compute content-addressed hash for a mapping.
+
+    The hash is computed on the canonical JSON representation of:
+    - docstring
+    - name_mapping
+    - alias_mapping
+    - comment
+
+    This enables deduplication: identical mappings share the same hash and storage.
+
+    Args:
+        docstring: The function docstring for this mapping
+        name_mapping: Normalized name -> original name mapping
+        alias_mapping: Ouverture function hash -> alias mapping
+        comment: Optional comment explaining this mapping variant
+
+    Returns:
+        64-character hex hash (SHA256)
+    """
+    mapping_dict = {
+        'docstring': docstring,
+        'name_mapping': name_mapping,
+        'alias_mapping': alias_mapping,
+        'comment': comment
+    }
+
+    # Create canonical JSON (sorted keys, no whitespace)
+    canonical_json = json.dumps(mapping_dict, sort_keys=True, ensure_ascii=False)
+
+    # Compute hash
+    return hash_compute(canonical_json)
+
+
+def schema_detect_version(func_hash: str) -> int:
+    """
+    Detect the schema version of a stored function.
+
+    Checks the filesystem to determine if a function is stored in v0 or v1 format:
+    - v0: $OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json
+    - v1: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+
+    Args:
+        func_hash: The function hash to check
+
+    Returns:
+        0 for v0 format, 1 for v1 format, None if function not found
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Check for v1 format first (function directory with object.json)
+    v1_func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    v1_object_json = v1_func_dir / 'object.json'
+
+    if v1_object_json.exists():
+        return 1
+
+    # Check for v0 format (JSON file)
+    v0_hash_dir = objects_dir / func_hash[:2]
+    v0_json_path = v0_hash_dir / f'{func_hash[2:]}.json'
+
+    if v0_json_path.exists():
+        return 0
+
+    # Function not found
+    return None
+
+
+def metadata_create() -> Dict[str, any]:
+    """
+    Create default metadata for a function.
+
+    Generates metadata with:
+    - created: ISO 8601 timestamp
+    - author: Username from environment (USER or USERNAME)
+    - tags: Empty list
+    - dependencies: Empty list
+
+    Returns:
+        Dictionary with metadata fields
+    """
+    from datetime import datetime
+
+    # Get author from environment
+    author = os.environ.get('USER', os.environ.get('USERNAME', ''))
+
+    # Get current timestamp in ISO 8601 format
+    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    return {
+        'created': timestamp,
+        'author': author,
+        'tags': [],
+        'dependencies': []
+    }
 
 
 def directory_get_ouverture() -> Path:
@@ -336,9 +448,14 @@ def directory_get_ouverture() -> Path:
     return Path(home) / '.local' / 'ouverture'
 
 
-def function_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
-                  name_mapping: Dict[str, str], alias_mapping: Dict[str, str]):
-    """Save the function to the ouverture objects directory"""
+def function_save_v0(hash_value: str, lang: str, normalized_code: str, docstring: str,
+                     name_mapping: Dict[str, str], alias_mapping: Dict[str, str]):
+    """
+    Save the function to the ouverture objects directory using schema v0.
+
+    This function is kept for the migration tool and backward compatibility.
+    New code should use function_save_v1() instead.
+    """
     # Create directory structure: OUVERTURE_DIR/objects/XX/
     ouverture_dir = directory_get_ouverture()
     objects_dir = ouverture_dir / 'objects'
@@ -373,6 +490,125 @@ def function_save(hash_value: str, lang: str, normalized_code: str, docstring: s
     print(f"Function saved: {json_path}")
     print(f"Hash: {hash_value}")
     print(f"Language: {lang}")
+
+
+def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]):
+    """
+    Save function to ouverture directory using schema v1.
+
+    Creates the function directory and object.json file:
+    - Directory: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../
+    - File: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+
+    Args:
+        hash_value: Function hash (64-character hex)
+        normalized_code: Normalized code with docstring
+        metadata: Metadata dict (created, author, tags, dependencies)
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Create function directory: objects/sha256/XX/YYYYYY.../
+    func_dir = objects_dir / 'sha256' / hash_value[:2] / hash_value[2:]
+    func_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create object.json
+    object_json = func_dir / 'object.json'
+
+    data = {
+        'schema_version': 1,
+        'hash': hash_value,
+        'hash_algorithm': 'sha256',
+        'normalized_code': normalized_code,
+        'encoding': 'none',
+        'metadata': metadata
+    }
+
+    with open(object_json, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print(f"Function saved (v1): {object_json}")
+    print(f"Hash: {hash_value}")
+
+
+def mapping_save_v1(func_hash: str, lang: str, docstring: str,
+                   name_mapping: Dict[str, str], alias_mapping: Dict[str, str],
+                   comment: str = "") -> str:
+    """
+    Save language mapping to ouverture directory using schema v1.
+
+    Creates the mapping directory and mapping.json file:
+    - Directory: $OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../
+    - File: $OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json
+
+    The mapping is content-addressed, enabling deduplication.
+
+    Args:
+        func_hash: Function hash (64-character hex)
+        lang: Language code (e.g., "eng", "fra")
+        docstring: Function docstring for this language
+        name_mapping: Normalized name -> original name mapping
+        alias_mapping: Ouverture function hash -> alias mapping
+        comment: Optional comment explaining this mapping variant
+
+    Returns:
+        Mapping hash (64-character hex)
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Compute mapping hash
+    mapping_hash = mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+
+    # Create mapping directory: objects/sha256/XX/Y.../lang/sha256/ZZ/W.../
+    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    mapping_dir = func_dir / lang / 'sha256' / mapping_hash[:2] / mapping_hash[2:]
+    mapping_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create mapping.json
+    mapping_json = mapping_dir / 'mapping.json'
+
+    data = {
+        'docstring': docstring,
+        'name_mapping': name_mapping,
+        'alias_mapping': alias_mapping,
+        'comment': comment
+    }
+
+    with open(mapping_json, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print(f"Mapping saved (v1): {mapping_json}")
+    print(f"Language: {lang}")
+    print(f"Mapping hash: {mapping_hash}")
+
+    return mapping_hash
+
+
+def function_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
+                  name_mapping: Dict[str, str], alias_mapping: Dict[str, str], comment: str = ""):
+    """
+    Save function to ouverture directory using schema v1 (current default).
+
+    This is the main entry point for saving functions. It uses schema v1 format.
+
+    Args:
+        hash_value: Function hash (64-character hex)
+        lang: Language code (e.g., "eng", "fra")
+        normalized_code: Normalized code with docstring
+        docstring: Function docstring for this language
+        name_mapping: Normalized name -> original name mapping
+        alias_mapping: Ouverture function hash -> alias mapping
+        comment: Optional comment explaining this mapping variant
+    """
+    # Create metadata
+    metadata = metadata_create()
+
+    # Save function (object.json)
+    function_save_v1(hash_value, normalized_code, metadata)
+
+    # Save mapping (mapping.json)
+    mapping_save_v1(hash_value, lang, docstring, name_mapping, alias_mapping, comment)
 
 
 def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_mapping: Dict[str, str]) -> str:
@@ -443,8 +679,14 @@ def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_m
     return ast.unparse(tree)
 
 
-def function_add(file_path_with_lang: str):
-    """Add a function to the ouverture pool"""
+def function_add(file_path_with_lang: str, comment: str = ""):
+    """
+    Add a function to the ouverture pool using schema v1.
+
+    Args:
+        file_path_with_lang: File path with language suffix (e.g., "file.py@eng")
+        comment: Optional comment explaining this mapping variant
+    """
     # Parse the path and language
     if '@' not in file_path_with_lang:
         print("Error: Missing language suffix. Use format: path/to/file.py@lang", file=sys.stderr)
@@ -482,8 +724,8 @@ def function_add(file_path_with_lang: str):
     # Compute hash on code WITHOUT docstring (so same logic = same hash regardless of language)
     hash_value = hash_compute(normalized_code_without_docstring)
 
-    # Save to JSON (store the version WITH docstring for display purposes)
-    function_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping)
+    # Save to v1 format (store the version WITH docstring for display purposes)
+    function_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping, comment)
 
 
 def docstring_replace(code: str, new_docstring: str) -> str:
@@ -527,9 +769,13 @@ def docstring_replace(code: str, new_docstring: str) -> str:
     return ast.unparse(tree)
 
 
-def function_load(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
+def function_load_v0(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
     """
-    Load a function from the ouverture pool.
+    Load a function from the ouverture pool using schema v0.
+
+    This function is kept for backward compatibility with v0 format.
+    New code should use function_load() which dispatches to v0 or v1.
+
     Returns (normalized_code, name_mapping, alias_mapping, docstring)
     """
     # Build file path using configurable ouverture directory
@@ -567,8 +813,302 @@ def function_load(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict
     return normalized_code, name_mapping, alias_mapping, docstring
 
 
+def function_load_v1(hash_value: str) -> Dict[str, any]:
+    """
+    Load function from ouverture directory using schema v1.
+
+    Loads only the object.json file (no language-specific data).
+
+    Args:
+        hash_value: Function hash (64-character hex)
+
+    Returns:
+        Dictionary with schema_version, hash, hash_algorithm, normalized_code, encoding, metadata
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Build path: objects/sha256/XX/YYYYYY.../object.json
+    func_dir = objects_dir / 'sha256' / hash_value[:2] / hash_value[2:]
+    object_json = func_dir / 'object.json'
+
+    # Check if file exists
+    if not object_json.exists():
+        print(f"Error: Function not found (v1): {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load the JSON data
+    try:
+        with open(object_json, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse object.json: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    return data
+
+
+def mappings_list_v1(func_hash: str, lang: str) -> list:
+    """
+    List all mapping variants for a given function and language.
+
+    Scans the language directory and returns all available mappings.
+
+    Args:
+        func_hash: Function hash (64-character hex)
+        lang: Language code (e.g., "eng", "fra")
+
+    Returns:
+        List of (mapping_hash, comment) tuples
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Build path: objects/sha256/XX/YYYYYY.../lang/
+    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    lang_dir = func_dir / lang
+
+    # Check if language directory exists
+    if not lang_dir.exists():
+        return []
+
+    # Scan for mapping directories: lang/sha256/ZZ/WWWW.../mapping.json
+    mappings = []
+    sha256_dir = lang_dir / 'sha256'
+    if not sha256_dir.exists():
+        return []
+
+    # Iterate through hash prefix directories (ZZ/)
+    for hash_prefix_dir in sha256_dir.iterdir():
+        if not hash_prefix_dir.is_dir():
+            continue
+
+        # Iterate through full hash directories (WWWW.../)
+        for mapping_hash_dir in hash_prefix_dir.iterdir():
+            if not mapping_hash_dir.is_dir():
+                continue
+
+            # Check if mapping.json exists
+            mapping_json = mapping_hash_dir / 'mapping.json'
+            if not mapping_json.exists():
+                continue
+
+            # Reconstruct mapping hash from path
+            mapping_hash = hash_prefix_dir.name + mapping_hash_dir.name
+
+            # Load mapping to get comment
+            try:
+                with open(mapping_json, 'r', encoding='utf-8') as f:
+                    mapping_data = json.load(f)
+                comment = mapping_data.get('comment', '')
+                mappings.append((mapping_hash, comment))
+            except (json.JSONDecodeError, IOError):
+                # Skip invalid mapping files
+                continue
+
+    return mappings
+
+
+def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
+    """
+    Load a specific language mapping using schema v1.
+
+    Args:
+        func_hash: Function hash (64-character hex)
+        lang: Language code (e.g., "eng", "fra")
+        mapping_hash: Mapping hash (64-character hex)
+
+    Returns:
+        Tuple of (docstring, name_mapping, alias_mapping, comment)
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Build path: objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json
+    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    mapping_dir = func_dir / lang / 'sha256' / mapping_hash[:2] / mapping_hash[2:]
+    mapping_json = mapping_dir / 'mapping.json'
+
+    # Check if file exists
+    if not mapping_json.exists():
+        print(f"Error: Mapping not found: {func_hash}@{lang} (mapping hash: {mapping_hash})", file=sys.stderr)
+        sys.exit(1)
+
+    # Load the JSON data
+    try:
+        with open(mapping_json, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse mapping.json: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    docstring = data.get('docstring', '')
+    name_mapping = data.get('name_mapping', {})
+    alias_mapping = data.get('alias_mapping', {})
+    comment = data.get('comment', '')
+
+    return docstring, name_mapping, alias_mapping, comment
+
+
+def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
+    """
+    Load a function from the ouverture pool (dispatch to v0 or v1).
+
+    Detects the schema version and routes to the appropriate loader.
+
+    Args:
+        hash_value: Function hash (64-character hex)
+        lang: Language code (e.g., "eng", "fra")
+        mapping_hash: Optional mapping hash for v1 (64-character hex)
+
+    Returns:
+        Tuple of (normalized_code, name_mapping, alias_mapping, docstring)
+    """
+    # Detect schema version
+    version = schema_detect_version(hash_value)
+
+    if version is None:
+        print(f"Error: Function not found: {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    if version == 0:
+        # Load v0 format (backward compatibility)
+        return function_load_v0(hash_value, lang)
+
+    elif version == 1:
+        # Load v1 format
+        # Load object.json
+        func_data = function_load_v1(hash_value)
+        normalized_code = func_data['normalized_code']
+
+        # Get available mappings
+        mappings = mappings_list_v1(hash_value, lang)
+
+        if len(mappings) == 0:
+            print(f"Error: No mappings found for language '{lang}'", file=sys.stderr)
+            sys.exit(1)
+
+        # Determine which mapping to load
+        if mapping_hash is not None:
+            # Explicit mapping requested
+            selected_hash = mapping_hash
+        elif len(mappings) == 1:
+            # Only one mapping available
+            selected_hash, _ = mappings[0]
+        else:
+            # Multiple mappings available - pick first alphabetically for now
+            # (Phase 5 will improve this with a selection menu)
+            mappings_sorted = sorted(mappings, key=lambda x: x[0])
+            selected_hash, _ = mappings_sorted[0]
+
+        # Load the mapping
+        docstring, name_mapping, alias_mapping, comment = mapping_load_v1(hash_value, lang, selected_hash)
+
+        return normalized_code, name_mapping, alias_mapping, docstring
+
+    else:
+        print(f"Error: Unsupported schema version: {version}", file=sys.stderr)
+        sys.exit(1)
+
+
+def function_show(hash_with_lang_and_mapping: str):
+    """
+    Show a function from the ouverture pool with mapping selection support.
+
+    Supports three formats:
+    - HASH@LANG: Show single mapping, or menu if multiple exist
+    - HASH@LANG@MAPPING_HASH: Show specific mapping
+
+    Args:
+        hash_with_lang_and_mapping: Function identifier in format HASH@LANG[@MAPPING_HASH]
+    """
+    # Parse the format
+    if '@' not in hash_with_lang_and_mapping:
+        print("Error: Missing language suffix. Use format: HASH@lang[@mapping_hash]", file=sys.stderr)
+        sys.exit(1)
+
+    parts = hash_with_lang_and_mapping.split('@')
+    if len(parts) < 2:
+        print("Error: Invalid format. Use format: HASH@lang[@mapping_hash]", file=sys.stderr)
+        sys.exit(1)
+
+    hash_value = parts[0]
+    lang = parts[1]
+    mapping_hash = parts[2] if len(parts) > 2 else None
+
+    # Validate hash format (should be 64 hex characters for SHA256)
+    if len(hash_value) != 64 or not all(c in '0123456789abcdef' for c in hash_value.lower()):
+        print(f"Error: Invalid hash format. Expected 64 hex characters. Got: {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate language code (should be 3 characters, ISO 639-3)
+    if len(lang) != 3:
+        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+        sys.exit(1)
+
+    # Detect schema version
+    version = schema_detect_version(hash_value)
+    if version is None:
+        print(f"Error: Function not found: {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    # Handle v0 functions (always single mapping per language)
+    if version == 0:
+        # v0 functions always have exactly one mapping per language
+        normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang)
+
+        # Replace docstring and denormalize
+        try:
+            normalized_code = docstring_replace(normalized_code, docstring)
+            original_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
+        except Exception as e:
+            print(f"Error: Failed to denormalize code: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        # Print the code
+        print(original_code)
+        return
+
+    # Handle v1 functions
+    # Get available mappings for the language
+    mappings = mappings_list_v1(hash_value, lang)
+
+    if len(mappings) == 0:
+        print(f"Error: No mappings found for language '{lang}'", file=sys.stderr)
+        sys.exit(1)
+
+    # Determine which mapping to show
+    if mapping_hash is not None:
+        # Explicit mapping hash provided
+        selected_hash = mapping_hash
+    elif len(mappings) == 1:
+        # Only one mapping - show it directly
+        selected_hash, _ = mappings[0]
+    else:
+        # Multiple mappings - show selection menu
+        print(f"Multiple mappings found for '{lang}'. Please choose one:\n")
+        for m_hash, comment in sorted(mappings):
+            comment_suffix = f"  # {comment}" if comment else ""
+            print(f"ouverture.py show {hash_value}@{lang}@{m_hash}{comment_suffix}")
+        return
+
+    # Load the selected mapping
+    normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang, mapping_hash=selected_hash)
+
+    # Replace docstring and denormalize
+    try:
+        normalized_code = docstring_replace(normalized_code, docstring)
+        original_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
+    except Exception as e:
+        print(f"Error: Failed to denormalize code: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Print the code
+    print(original_code)
+
+
 def function_get(hash_with_lang: str):
-    """Get a function from the ouverture pool"""
+    """Get a function from the ouverture pool (backward compatible with show command)"""
     # Parse the hash and language
     if '@' not in hash_with_lang:
         print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
@@ -607,6 +1147,194 @@ def function_get(hash_with_lang: str):
     print(original_code)
 
 
+def schema_migrate_function_v0_to_v1(func_hash: str, keep_v0: bool = False):
+    """
+    Migrate a single function from schema v0 to v1.
+
+    Args:
+        func_hash: Function hash (64-character hex)
+        keep_v0: If True, keep the v0 file after migration (default: False)
+    """
+    # Verify it's a v0 function
+    version = schema_detect_version(func_hash)
+    if version != 0:
+        print(f"Error: Function {func_hash} is not in v0 format (version: {version})", file=sys.stderr)
+        sys.exit(1)
+
+    # Load v0 data
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+    v0_path = objects_dir / func_hash[:2] / f'{func_hash[2:]}.json'
+
+    try:
+        with open(v0_path, 'r', encoding='utf-8') as f:
+            v0_data = json.load(f)
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Error: Failed to load v0 data: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Extract normalized code
+    normalized_code = v0_data['normalized_code']
+
+    # Create metadata for v1
+    metadata = metadata_create()
+
+    # Save function in v1 format (object.json only)
+    function_save_v1(func_hash, normalized_code, metadata)
+
+    # Migrate each language mapping
+    for lang in v0_data.get('name_mappings', {}).keys():
+        docstring = v0_data.get('docstrings', {}).get(lang, '')
+        name_mapping = v0_data['name_mappings'][lang]
+        alias_mapping = v0_data.get('alias_mappings', {}).get(lang, {})
+
+        # Save mapping in v1 format
+        mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment='')
+
+    # Validate migration
+    is_valid, errors = schema_validate_v1(func_hash)
+    if not is_valid:
+        print(f"Error: Migration validation failed for {func_hash}:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        sys.exit(1)
+
+    # Delete v0 file if requested
+    if not keep_v0:
+        try:
+            v0_path.unlink()
+            # Try to remove parent directory if empty
+            try:
+                v0_path.parent.rmdir()
+            except OSError:
+                pass  # Directory not empty, that's fine
+        except IOError as e:
+            print(f"Warning: Failed to delete v0 file: {e}", file=sys.stderr)
+
+    print(f"Migrated {func_hash} from v0 to v1 (keep_v0={keep_v0})")
+
+
+def schema_migrate_all_v0_to_v1(keep_v0: bool = False, dry_run: bool = False) -> list:
+    """
+    Migrate all v0 functions to v1.
+
+    Args:
+        keep_v0: If True, keep v0 files after migration (default: False)
+        dry_run: If True, only report what would be migrated without actually migrating (default: False)
+
+    Returns:
+        List of function hashes that were (or would be) migrated
+    """
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Find all v0 files
+    v0_functions = []
+    if not objects_dir.exists():
+        return v0_functions
+
+    for hash_prefix_dir in objects_dir.iterdir():
+        if not hash_prefix_dir.is_dir():
+            continue
+        if hash_prefix_dir.name == 'sha256':
+            # Skip v1 algorithm directory
+            continue
+
+        for json_file in hash_prefix_dir.glob('*.json'):
+            # Reconstruct hash
+            func_hash = hash_prefix_dir.name + json_file.stem
+
+            # Verify it's v0
+            version = schema_detect_version(func_hash)
+            if version == 0:
+                v0_functions.append(func_hash)
+
+    if dry_run:
+        print(f"Dry run: Would migrate {len(v0_functions)} functions")
+        for func_hash in v0_functions:
+            print(f"  - {func_hash}")
+        return v0_functions
+
+    # Migrate each function
+    print(f"Migrating {len(v0_functions)} functions from v0 to v1...")
+    for func_hash in v0_functions:
+        try:
+            schema_migrate_function_v0_to_v1(func_hash, keep_v0=keep_v0)
+        except Exception as e:
+            print(f"Error migrating {func_hash}: {e}", file=sys.stderr)
+            # Continue with other functions
+
+    print(f"Migration complete. Migrated {len(v0_functions)} functions.")
+    return v0_functions
+
+
+def schema_validate_v1(func_hash: str) -> tuple:
+    """
+    Validate a v1 function.
+
+    Checks:
+    - object.json exists and is valid
+    - At least one language mapping exists
+    - All mapping files are valid JSON
+
+    Args:
+        func_hash: Function hash (64-character hex)
+
+    Returns:
+        Tuple of (is_valid, errors) where errors is a list of error messages
+    """
+    errors = []
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    # Check object.json exists
+    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    object_json = func_dir / 'object.json'
+
+    if not object_json.exists():
+        errors.append(f"object.json not found for function {func_hash}")
+        return False, errors
+
+    # Validate object.json structure
+    try:
+        with open(object_json, 'r', encoding='utf-8') as f:
+            func_data = json.load(f)
+
+        # Check required fields
+        required_fields = ['schema_version', 'hash', 'hash_algorithm', 'normalized_code', 'encoding', 'metadata']
+        for field in required_fields:
+            if field not in func_data:
+                errors.append(f"Missing required field in object.json: {field}")
+
+        # Verify schema version
+        if func_data.get('schema_version') != 1:
+            errors.append(f"Invalid schema version: {func_data.get('schema_version')}")
+
+    except (IOError, json.JSONDecodeError) as e:
+        errors.append(f"Failed to parse object.json: {e}")
+        return False, errors
+
+    # Check that at least one language mapping exists
+    if not func_dir.exists():
+        errors.append(f"Function directory does not exist: {func_dir}")
+        return False, errors
+
+    # Count language directories
+    lang_count = 0
+    for item in func_dir.iterdir():
+        if item.is_dir() and item.name != 'sha256' and not item.name.endswith('.json'):
+            lang_count += 1
+
+    if lang_count == 0:
+        errors.append("No language mappings found (no language directories)")
+
+    # If we have errors, return False
+    if errors:
+        return False, errors
+
+    return True, []
+
+
 def main():
     parser = argparse.ArgumentParser(description='ouverture - Function pool manager')
     subparsers = parser.add_subparsers(dest='command', help='Commands')
@@ -614,17 +1342,50 @@ def main():
     # Add command
     add_parser = subparsers.add_parser('add', help='Add a function to the pool')
     add_parser.add_argument('file', help='Path to Python file with @lang suffix (e.g., file.py@eng)')
+    add_parser.add_argument('--comment', default='', help='Optional comment explaining this mapping variant')
 
-    # Get command
+    # Get command (backward compatibility)
     get_parser = subparsers.add_parser('get', help='Get a function from the pool')
     get_parser.add_argument('hash', help='Function hash with @lang suffix (e.g., abc123...@eng)')
+
+    # Show command (improved version of get with mapping selection)
+    show_parser = subparsers.add_parser('show', help='Show a function with mapping selection support')
+    show_parser.add_argument('hash', help='Function hash with @lang[@mapping_hash] (e.g., abc123...@eng or abc123...@eng@xyz789...)')
+
+    # Migrate command
+    migrate_parser = subparsers.add_parser('migrate', help='Migrate functions from v0 to v1')
+    migrate_parser.add_argument('hash', nargs='?', help='Specific function hash to migrate (optional, migrates all if omitted)')
+    migrate_parser.add_argument('--keep-v0', action='store_true', help='Keep v0 files after migration')
+    migrate_parser.add_argument('--dry-run', action='store_true', help='Show what would be migrated without actually migrating')
+
+    # Validate command
+    validate_parser = subparsers.add_parser('validate', help='Validate v1 function structure')
+    validate_parser.add_argument('hash', help='Function hash to validate')
 
     args = parser.parse_args()
 
     if args.command == 'add':
-        function_add(args.file)
+        function_add(args.file, args.comment)
     elif args.command == 'get':
         function_get(args.hash)
+    elif args.command == 'show':
+        function_show(args.hash)
+    elif args.command == 'migrate':
+        if args.hash:
+            # Migrate specific function
+            schema_migrate_function_v0_to_v1(args.hash, keep_v0=args.keep_v0)
+        else:
+            # Migrate all functions
+            schema_migrate_all_v0_to_v1(keep_v0=args.keep_v0, dry_run=args.dry_run)
+    elif args.command == 'validate':
+        is_valid, errors = schema_validate_v1(args.hash)
+        if is_valid:
+            print(f"✓ Function {args.hash} is valid")
+        else:
+            print(f"✗ Function {args.hash} is invalid:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            sys.exit(1)
     else:
         parser.print_help()
 
