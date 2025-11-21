@@ -1,6 +1,6 @@
 # ROADMAP
 
-This document tracks the development roadmap for Ouverture.
+This document tracks the development roadmap for Mobius.
 
 Context sources:
 - `LIMITS.md` - Current capabilities and known limitations
@@ -9,24 +9,24 @@ Context sources:
 
 ## Priority 0: Applications
 
-- **ouverture**: Rewrite of ouverture in ouverture (self-hosting)
-- **p5py**: Port p5.js creative coding library to Python using ouverture for function sharing
+- **mobius**: Rewrite of mobius in mobius (self-hosting)
+- **p5py**: Port p5.js creative coding library to Python using mobius for function sharing
 - **asyncify**: Tool for on-the-fly rewriting of synchronous Python code to async/await style
-- **todo-flask**: Reference todo application built with Flask demonstrating ouverture integration
+- **todo-flask**: Reference todo application built with Flask demonstrating mobius integration
 
 ## Priority 1: Git Remotes, async def / await Support, Compilation
 
 ### Async/Await Support
 - Add support for `async def` functions (ast.AsyncFunctionDef)
 - Handle `await` expressions in normalization
-- Normalize async function names to `_ouverture_v_0` like regular functions
+- Normalize async function names to `_mobius_v_0` like regular functions
 - Document async function behavior and limitations
 
 ### Git Remotes
-- Implement `ouverture.py remote add NAME git@host:user/repo.git` for Git SSH remotes
-- Implement `ouverture.py remote add NAME git+https://host/user/repo.git` for Git HTTPS remotes
-- Implement `ouverture.py remote add NAME git+file:///path/to/repo` for local Git remotes
-- Store functions in a Git repository structure compatible with ouverture pool format
+- Implement `mobius.py remote add NAME git@host:user/repo.git` for Git SSH remotes
+- Implement `mobius.py remote add NAME git+https://host/user/repo.git` for Git HTTPS remotes
+- Implement `mobius.py remote add NAME git+file:///path/to/repo` for local Git remotes
+- Store functions in a Git repository structure compatible with mobius pool format
 - Support authentication via SSH keys and Git credential helpers
 - Implement `remote pull` and `remote push` for Git remotes
 
@@ -34,13 +34,13 @@ Context sources:
 - Reorganize tests into directory structure based on CLI commands
 - Create `tests/` directory with subdirectory per command (e.g., `tests/add/`, `tests/show/`, `tests/run/`)
 - Each command directory contains test cases specific to that CLI command
-- Keep `test_ouverture.py` for complex internal tests (AST rewriting, on-disk schema validation, hash computation)
+- Keep `test_mobius.py` for complex internal tests (AST rewriting, on-disk schema validation, hash computation)
 - Add integration tests that exercise full CLI workflows
 
 ### Compilation
-- Implement `ouverture.py compile HASH@lang` command to generate standalone executable
+- Implement `mobius.py compile HASH@lang` command to generate standalone executable
 - Use PyOxidizer to bundle Python interpreter with function and dependencies
-- Resolve and include all ouverture pool dependencies transitively
+- Resolve and include all mobius pool dependencies transitively
 - Generate platform-specific binaries (Linux, macOS, Windows)
 - Support `--output` flag to specify output path
 
@@ -48,7 +48,7 @@ Context sources:
 
 ### HTTP/HTTPS Remotes
 - Implement HTTP API client for HTTP/HTTPS remotes
-- Add `ouverture.py remote add NAME URL` support for HTTP/HTTPS URLs
+- Add `mobius.py remote add NAME URL` support for HTTP/HTTPS URLs
 - Add authentication/authorization for push operations
 - Implement conflict resolution for remote operations
 - Add caching layer for remote fetches
@@ -62,15 +62,15 @@ Context sources:
 ### Search Filtering
 - Add filtering by language, author, date to `search` command
 - Display function statistics (downloads, ratings if available)
-- Implement `ouverture.py log [NAME | URL]` to show log of specific remote
+- Implement `mobius.py log [NAME | URL]` to show log of specific remote
 
 ### Search Indexing (Performance Enhancement)
 - Implement local index for faster search operations
 - Index structure: metadata cache (function hashes, docstrings, tags, dependencies)
-- Index file: `$OUVERTURE_DIRECTORY/index.db` (SQLite or JSON-based)
+- Index file: `$MOBIUS_DIRECTORY/index.db` (SQLite or JSON-based)
 - Automatically update index on `add`, `translate`, and `get` operations
-- Implement `ouverture.py index rebuild` command to rebuild index from objects directory
-- Implement `ouverture.py index verify` command to check index consistency
+- Implement `mobius.py index rebuild` command to rebuild index from objects directory
+- Implement `mobius.py index verify` command to check index consistency
 - Support incremental indexing (only reindex changed functions)
 - Search query optimization:
   - Full-text search on docstrings across all languages
@@ -94,7 +94,7 @@ Context sources:
 
 ### Packaging
 - Create `pyproject.toml` for modern Python packaging
-- Add entry point: `ouverture` command
+- Add entry point: `mobius` command
 - Test `pip install -e .` works correctly
 - Publish to pypi.org
 - Add mypy type checking configuration
@@ -116,7 +116,7 @@ Context sources:
 ### Multilingual Test Corpus
 - Create `tests/corpus/simple_functions/` with parallel implementations
 - Create `tests/corpus/with_imports/` with import examples
-- Create `tests/corpus/compositional/` with ouverture imports
+- Create `tests/corpus/compositional/` with mobius imports
 - Implement corpus discovery and equivalence testing
 - Add test cases in 5+ languages (eng, fra, spa, ara, zho)
 
@@ -137,7 +137,7 @@ Context sources:
 
 Transcript testing uses markdown files to define CLI test scenarios declaratively.
 
-**Why it works for Ouverture**:
+**Why it works for Mobius**:
 - CLI commands produce deterministic, predictable output
 - Tests follow a consistent setup → command → assert pattern
 - Non-programmers can contribute test cases
@@ -161,10 +161,10 @@ def greet(name):
 ## Transcript
 
 ```console
-$ ouverture.py add greet.py@eng
+$ mobius.py add greet.py@eng
 Hash: {HASH}
 
-$ ouverture.py show {HASH}@eng
+$ mobius.py show {HASH}@eng
 def greet(name):
     """Greet someone by name"""
     return f'Hello, {name}!'
@@ -203,7 +203,7 @@ def greet(name):
 - Expand pattern library to top 100 equivalent patterns
 - Implement user feedback system for marking functions as equivalent
 - Store equivalence relationships in pool metadata
-- Add `ouverture search --similar <hash>` command
+- Add `mobius search --similar <hash>` command
 
 ### Long Term (2+ years)
 - Experiment with ML-based code embeddings (CodeBERT)
@@ -226,14 +226,14 @@ def greet(name):
 - Document impact on multilingual equivalence
 
 ### Import Validation
-- Implement validation that ouverture imports exist in pool
+- Implement validation that mobius imports exist in pool
 - Add `--validate-imports` flag to `add` command
 - Warn (don't error) when imports are missing
 
 ### CLI Improvements
-- Add `ouverture list` command to show pool contents
-- Add `ouverture list --hash <HASH>` to show languages for hash
-- Add `ouverture stats <HASH>` to show function statistics
+- Add `mobius list` command to show pool contents
+- Add `mobius list --hash <HASH>` to show languages for hash
+- Add `mobius stats <HASH>` to show function statistics
 - Add `--verbose` flag for detailed output
 - Add `--version` flag
 - Improve error messages with suggestions
@@ -242,7 +242,7 @@ def greet(name):
 
 ### Traceback Localization
 - Implement traceback rewriting to show native language variable names
-- When exception occurs, map `_ouverture_v_X` back to original names
+- When exception occurs, map `_mobius_v_X` back to original names
 - Show both normalized and native language versions of traceback
 - Preserve line numbers from original source
 
@@ -250,7 +250,7 @@ def greet(name):
 - Integrate with Python debugger (pdb)
 - Show variables in native language during debugging
 - Allow setting breakpoints using native language names
-- Implement `ouverture.py run HASH@lang --debug` for interactive debugging
+- Implement `mobius.py run HASH@lang --debug` for interactive debugging
 - Support stepping through code with native language context
 
 ## Priority 9: Infrastructure (Microlibrary Vision)
@@ -261,8 +261,8 @@ def greet(name):
 - Implement S3/blob storage for function JSON
 - Implement Redis caching layer
 - Implement search by hash, signature, description
-- Add `ouverture publish` command
-- Add `ouverture pull` command from registry
+- Add `mobius publish` command
+- Add `mobius pull` command from registry
 - Create basic web UI for browsing
 
 ### Phase 2: Community Features (Months 7-9)
@@ -274,7 +274,7 @@ def greet(name):
 - Add reputation system for contributors
 
 ### Phase 3: Developer Tools (Months 10-12)
-- Create VS Code extension for ouverture
+- Create VS Code extension for mobius
 - Implement GitHub Actions integration
 - Create pre-commit hooks template
 - Build documentation website
@@ -283,7 +283,7 @@ def greet(name):
 ### Phase 4: Federation (Year 2)
 - Design federated registry protocol
 - Implement private registry support
-- Add registry configuration in `~/.config/ouverture/config.yaml`
+- Add registry configuration in `~/.config/mobius/config.yaml`
 - Implement registry priority and fallback
 - Add semantic search with ML embeddings
 
@@ -311,7 +311,7 @@ def greet(name):
 ### User Documentation
 - Document workarounds for unsupported features (classes, globals, etc.)
 - Create migration guide for future schema version changes
-- Add more examples of compositional functions with ouverture imports
+- Add more examples of compositional functions with mobius imports
 - Create quickstart tutorial
 - Create video walkthrough
 

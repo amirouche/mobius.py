@@ -1,20 +1,20 @@
-# Ouverture Usage
+# Mobius Usage
 
 Multilingual function pool: same logic, different languages → same hash.
 
 ## Commands
 
 ```
-usage: ouverture.py [-h]
+usage: mobius.py [-h]
                     {init,whoami,add,get,show,translate,run,review,log,search,remote,migrate,validate,caller,refactor,compile}
                     ...
 
-ouverture - Function pool manager
+mobius - Function pool manager
 
 positional arguments:
   {init,whoami,add,get,show,translate,run,review,log,search,remote,migrate,validate,caller,refactor,compile}
                         Commands
-    init                Initialize ouverture directory and config
+    init                Initialize mobius directory and config
     whoami              Get or set user configuration
     add                 Add a function to the pool
     get                 Get a function from the pool
@@ -40,23 +40,23 @@ options:
 ### `init` - Initialize configuration
 
 ```bash
-python3 ouverture.py init
+python3 mobius.py init
 ```
 
-Creates the ouverture directory and configuration file. Automatically run when needed, but can be called explicitly.
+Creates the mobius directory and configuration file. Automatically run when needed, but can be called explicitly.
 
-- Creates: `$HOME/.local/ouverture/` (or `$OUVERTURE_DIRECTORY`)
-- Creates: `~/.config/ouverture/config.json`
+- Creates: `$HOME/.local/mobius/` (or `$MOBIUS_DIRECTORY`)
+- Creates: `~/.config/mobius/config.json`
 
 Example:
 ```bash
-python3 ouverture.py init
+python3 mobius.py init
 ```
 
 ### `whoami` - User configuration
 
 ```bash
-python3 ouverture.py whoami {username|email|public-key|language} [VALUE...]
+python3 mobius.py whoami {username|email|public-key|language} [VALUE...]
 ```
 
 Get or set user configuration. Without VALUE, displays current setting. With VALUE, sets new value.
@@ -64,22 +64,22 @@ Get or set user configuration. Without VALUE, displays current setting. With VAL
 Examples:
 ```bash
 # Get username
-python3 ouverture.py whoami username
+python3 mobius.py whoami username
 
 # Set username
-python3 ouverture.py whoami username johndoe
+python3 mobius.py whoami username johndoe
 
 # Set email
-python3 ouverture.py whoami email john@example.com
+python3 mobius.py whoami email john@example.com
 
 # Set public key URL
-python3 ouverture.py whoami public-key https://example.com/keys/johndoe.pub
+python3 mobius.py whoami public-key https://example.com/keys/johndoe.pub
 
 # Set preferred languages (space-separated)
-python3 ouverture.py whoami language eng fra spa
+python3 mobius.py whoami language eng fra spa
 
 # Get preferred languages
-python3 ouverture.py whoami language
+python3 mobius.py whoami language
 ```
 
 ## Function Management
@@ -87,15 +87,15 @@ python3 ouverture.py whoami language
 ### `add` - Store a function
 
 ```bash
-python3 ouverture.py add FILENAME.py@LANG [--comment "description"]
+python3 mobius.py add FILENAME.py@LANG [--comment "description"]
 ```
 
 Normalizes and stores a Python function. Variable names and docstrings are language-specific; logic is hashed.
 
 Examples:
 ```bash
-python3 ouverture.py add calculate_average.py@eng
-python3 ouverture.py add calculer_moyenne.py@fra --comment "version formelle"
+python3 mobius.py add calculate_average.py@eng
+python3 mobius.py add calculer_moyenne.py@fra --comment "version formelle"
 ```
 
 Both produce the same hash if logic is identical.
@@ -103,7 +103,7 @@ Both produce the same hash if logic is identical.
 ### `show` - Display a function
 
 ```bash
-python3 ouverture.py show HASH@LANG[@MAPPING_HASH]
+python3 mobius.py show HASH@LANG[@MAPPING_HASH]
 ```
 
 Display function with language-specific names. If multiple mappings exist for a language, shows selection menu.
@@ -111,23 +111,23 @@ Display function with language-specific names. If multiple mappings exist for a 
 Examples:
 ```bash
 # Single mapping: displays function directly
-python3 ouverture.py show abc123...@eng
+python3 mobius.py show abc123...@eng
 
 # Multiple mappings: shows menu with commands
-python3 ouverture.py show abc123...@eng
+python3 mobius.py show abc123...@eng
 # Output:
 # Multiple mappings found for 'eng'. Please choose one:
-# ouverture.py show abc123...@eng@xyz789...  # Formal terminology
-# ouverture.py show abc123...@eng@def456...  # Casual style
+# mobius.py show abc123...@eng@xyz789...  # Formal terminology
+# mobius.py show abc123...@eng@def456...  # Casual style
 
 # Explicit mapping selection
-python3 ouverture.py show abc123...@eng@xyz789...
+python3 mobius.py show abc123...@eng@xyz789...
 ```
 
 ### `migrate` - Migrate v0 to v1
 
 ```bash
-python3 ouverture.py migrate [HASH] [--keep-v0] [--dry-run]
+python3 mobius.py migrate [HASH] [--keep-v0] [--dry-run]
 ```
 
 Migrate functions from v0 (single JSON file) to v1 (directory structure). Deletes v0 files after successful migration unless `--keep-v0` is specified.
@@ -135,35 +135,35 @@ Migrate functions from v0 (single JSON file) to v1 (directory structure). Delete
 Examples:
 ```bash
 # Migrate all functions
-python3 ouverture.py migrate
+python3 mobius.py migrate
 
 # Migrate specific function
-python3 ouverture.py migrate abc123...
+python3 mobius.py migrate abc123...
 
 # Safe mode: keep v0 files
-python3 ouverture.py migrate --keep-v0
+python3 mobius.py migrate --keep-v0
 
 # Preview without changes
-python3 ouverture.py migrate --dry-run
+python3 mobius.py migrate --dry-run
 ```
 
 ### `validate` - Validate function structure
 
 ```bash
-python3 ouverture.py validate HASH
+python3 mobius.py validate HASH
 ```
 
 Verify v1 function structure and hash integrity.
 
 Example:
 ```bash
-python3 ouverture.py validate abc123...
+python3 mobius.py validate abc123...
 ```
 
 ### `get` - Retrieve a function (deprecated)
 
 ```bash
-python3 ouverture.py get HASH@LANG
+python3 mobius.py get HASH@LANG
 ```
 
 Reconstructs function with language-specific names.
@@ -173,7 +173,7 @@ Reconstructs function with language-specific names.
 ### `translate` - Add translation
 
 ```bash
-python3 ouverture.py translate HASH@SOURCE_LANG TARGET_LANG
+python3 mobius.py translate HASH@SOURCE_LANG TARGET_LANG
 ```
 
 Add a translation for an existing function. Prompts for translated variable names and docstring.
@@ -181,7 +181,7 @@ Add a translation for an existing function. Prompts for translated variable name
 Examples:
 ```bash
 # Translate English function to French
-python3 ouverture.py translate abc123...@eng fra
+python3 mobius.py translate abc123...@eng fra
 
 # The command will:
 # 1. Show the source function (English)
@@ -196,7 +196,7 @@ python3 ouverture.py translate abc123...@eng fra
 ### `run` - Execute function interactively
 
 ```bash
-python3 ouverture.py run HASH@LANG [--debug]
+python3 mobius.py run HASH@LANG [--debug]
 ```
 
 Load and execute a function from the pool interactively. With `--debug`, runs with Python debugger (pdb) using native language variable names.
@@ -204,10 +204,10 @@ Load and execute a function from the pool interactively. With `--debug`, runs wi
 Examples:
 ```bash
 # Run function interactively
-python3 ouverture.py run abc123...@eng
+python3 mobius.py run abc123...@eng
 
 # Run with debugger
-python3 ouverture.py run abc123...@fra --debug
+python3 mobius.py run abc123...@fra --debug
 ```
 
 ## Discovery
@@ -215,7 +215,7 @@ python3 ouverture.py run abc123...@fra --debug
 ### `review` - Review function and dependencies
 
 ```bash
-python3 ouverture.py review HASH
+python3 mobius.py review HASH
 ```
 
 Recursively review a function and all its dependencies. Displays functions in user's preferred languages (set with `whoami language`).
@@ -223,20 +223,20 @@ Recursively review a function and all its dependencies. Displays functions in us
 Example:
 ```bash
 # Review function and dependencies
-python3 ouverture.py review abc123...
+python3 mobius.py review abc123...
 ```
 
 ### `log` - Show pool history
 
 ```bash
-python3 ouverture.py log
+python3 mobius.py log
 ```
 
 Display a git-like commit log of all functions in the pool with metadata.
 
 Example:
 ```bash
-python3 ouverture.py log
+python3 mobius.py log
 # Output:
 # Function Pool Log (3 functions)
 # Hash: abc123...
@@ -249,7 +249,7 @@ python3 ouverture.py log
 ### `search` - Search functions
 
 ```bash
-python3 ouverture.py search QUERY...
+python3 mobius.py search QUERY...
 ```
 
 Search for functions by name, docstring, or code content.
@@ -257,10 +257,10 @@ Search for functions by name, docstring, or code content.
 Examples:
 ```bash
 # Search for "average"
-python3 ouverture.py search average
+python3 mobius.py search average
 
 # Search for multiple terms
-python3 ouverture.py search calculate mean
+python3 mobius.py search calculate mean
 
 # Results show:
 # - Function name
@@ -275,7 +275,7 @@ python3 ouverture.py search calculate mean
 ### `remote add` - Add remote
 
 ```bash
-python3 ouverture.py remote add NAME URL
+python3 mobius.py remote add NAME URL
 ```
 
 Add a remote repository. Supports `file://`, `http://`, and `https://` URLs.
@@ -283,86 +283,86 @@ Add a remote repository. Supports `file://`, `http://`, and `https://` URLs.
 Examples:
 ```bash
 # Add local file remote
-python3 ouverture.py remote add shared file:///shared/pool
+python3 mobius.py remote add shared file:///shared/pool
 
 # Add HTTP remote (not yet fully implemented)
-python3 ouverture.py remote add origin https://ouverture.example.com/pool
+python3 mobius.py remote add origin https://mobius.example.com/pool
 ```
 
 ### `remote remove` - Remove remote
 
 ```bash
-python3 ouverture.py remote remove NAME
+python3 mobius.py remote remove NAME
 ```
 
 Remove a configured remote.
 
 Example:
 ```bash
-python3 ouverture.py remote remove shared
+python3 mobius.py remote remove shared
 ```
 
 ### `remote list` - List remotes
 
 ```bash
-python3 ouverture.py remote list
+python3 mobius.py remote list
 ```
 
 List all configured remotes.
 
 Example:
 ```bash
-python3 ouverture.py remote list
+python3 mobius.py remote list
 # Output:
 # Configured remotes:
 #   shared: file:///shared/pool
-#   origin: https://ouverture.example.com/pool
+#   origin: https://mobius.example.com/pool
 ```
 
 ### `remote pull` - Fetch from remote
 
 ```bash
-python3 ouverture.py remote pull NAME
+python3 mobius.py remote pull NAME
 ```
 
 Fetch functions from a remote repository. Currently supports `file://` URLs. HTTP/HTTPS support planned.
 
 Example:
 ```bash
-python3 ouverture.py remote pull shared
+python3 mobius.py remote pull shared
 ```
 
 ### `remote push` - Publish to remote
 
 ```bash
-python3 ouverture.py remote push NAME
+python3 mobius.py remote push NAME
 ```
 
 Publish functions to a remote repository. Currently supports `file://` URLs. HTTP/HTTPS support planned.
 
 Example:
 ```bash
-python3 ouverture.py remote push shared
+python3 mobius.py remote push shared
 ```
 
 ## Schema Management
 
 ## Environment Variables
 
-### `OUVERTURE_DIRECTORY`
+### `MOBIUS_DIRECTORY`
 
 Storage location for function pool.
 
-- Default: `$HOME/.local/ouverture/`
-- Custom: `export OUVERTURE_DIRECTORY=/path/to/pool`
+- Default: `$HOME/.local/mobius/`
+- Custom: `export MOBIUS_DIRECTORY=/path/to/pool`
 
 Example:
 ```bash
-export OUVERTURE_DIRECTORY=/shared/pool
-python3 ouverture.py add function.py@eng
+export MOBIUS_DIRECTORY=/shared/pool
+python3 mobius.py add function.py@eng
 ```
 
-### `OUVERTURE_USER`
+### `MOBIUS_USER`
 
 Not used. Author identity is automatically taken from `$USER` or `$USERNAME` environment variables.
 
@@ -371,7 +371,7 @@ Not used. Author identity is automatically taken from `$USER` or `$USERNAME` env
 Default write format. Content-addressed mappings enable deduplication and multiple naming variants per language.
 
 ```
-$OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../
+$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../
   object.json                           # Normalized code + metadata
   eng/sha256/XX/YYY.../mapping.json     # English name mapping
   eng/sha256/ZZ/WWW.../mapping.json     # Another English variant
@@ -386,7 +386,7 @@ $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../
 Read-only support maintained for backward compatibility.
 
 ```
-$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json   # Single file
+$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json   # Single file
 ```
 
 Use `migrate` command to convert v0 to v1.

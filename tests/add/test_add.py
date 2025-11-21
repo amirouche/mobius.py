@@ -1,5 +1,5 @@
 """
-Integration tests for 'ouverture.py add' command.
+Integration tests for 'mobius.py add' command.
 
 Grey-box style:
 - Setup: Create test files
@@ -80,8 +80,8 @@ def test_add_function_stores_normalized_code(cli_runner, tmp_path):
     with open(object_json, 'r') as f:
         data = json.load(f)
 
-    # Function should be renamed to _ouverture_v_0
-    assert '_ouverture_v_0' in data['normalized_code']
+    # Function should be renamed to _mobius_v_0
+    assert '_mobius_v_0' in data['normalized_code']
     # Original function name should NOT appear
     assert 'my_function' not in data['normalized_code']
 

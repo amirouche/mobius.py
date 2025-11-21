@@ -39,10 +39,10 @@ async def fetch_data(url):
     return response.json()
 
 # Normalized form
-async def _ouverture_v_0(_ouverture_v_1):
+async def _mobius_v_0(_mobius_v_1):
     """Fetch data from URL"""
-    _ouverture_v_2 = await http_get(_ouverture_v_1)
-    return _ouverture_v_2.json()
+    _mobius_v_2 = await http_get(_mobius_v_1)
+    return _mobius_v_2.json()
 ```
 
 ### Implementation Phases
@@ -92,21 +92,21 @@ async def _ouverture_v_0(_ouverture_v_1):
 
 - `file://` remotes implemented (local/network paths)
 - No Git repository support
-- Remote configuration stored in `$OUVERTURE_DIRECTORY/config.json`
+- Remote configuration stored in `$MOBIUS_DIRECTORY/config.json`
 
 ### Target State
 
 ```bash
 # Git SSH remote
-ouverture.py remote add origin git@github.com:user/functions.git
-ouverture.py remote pull origin
-ouverture.py remote push origin
+mobius.py remote add origin git@github.com:user/functions.git
+mobius.py remote pull origin
+mobius.py remote push origin
 
 # Git HTTPS remote
-ouverture.py remote add upstream git+https://github.com/org/pool.git
+mobius.py remote add upstream git+https://github.com/org/pool.git
 
 # Local Git remote
-ouverture.py remote add local git+file:///path/to/repo
+mobius.py remote add local git+file:///path/to/repo
 ```
 
 ### Storage Structure in Git Repository
@@ -175,7 +175,7 @@ repository/
    - Return list of pulled function hashes
 
 2. `git_cache_path(remote_name) -> Path`
-   - Return: `$OUVERTURE_DIRECTORY/cache/git/{remote_name}/`
+   - Return: `$MOBIUS_DIRECTORY/cache/git/{remote_name}/`
 
 **Workflow**:
 ```
@@ -217,7 +217,7 @@ copy files to cache → git add → git commit → git push
 - Uses user's existing SSH keys via ssh-agent
 - Uses git credential helpers (configured via `git config`)
 - Supports all auth methods git supports (tokens, OAuth, etc.)
-- Requires zero custom configuration in ouverture
+- Requires zero custom configuration in mobius
 
 **Authentication methods** (all handled by system git):
 1. **SSH keys**: System SSH agent automatically used
@@ -265,7 +265,7 @@ copy files to cache → git add → git commit → git push
 
 ### Current State
 
-- All tests in `test_ouverture.py` (105+ tests)
+- All tests in `test_mobius.py` (105+ tests)
 - Tests organized by internal function, not by CLI command
 - Makes it hard to find tests for specific user-facing features
 
@@ -309,7 +309,7 @@ tests/
 **Tasks**:
 1. Create `tests/` directory with subdirectories
 2. Create `tests/conftest.py` with shared fixtures:
-   - `temp_ouverture_dir` - Temporary pool directory
+   - `temp_mobius_dir` - Temporary pool directory
    - `sample_function` - Sample function fixture
    - `normalize_code_for_test` - Helper for normalized code
 3. Update `pytest.ini` or `pyproject.toml` for test discovery
@@ -350,7 +350,7 @@ tests/
 **Goal**: Remove old test file, update documentation
 
 **Tasks**:
-1. Delete `test_ouverture.py` after verification
+1. Delete `test_mobius.py` after verification
 2. Update `README_PYTEST.md` with new structure
 3. Update CI/CD configuration
 
@@ -364,7 +364,7 @@ tests/
 
 ### Current State
 
-- Functions can only be executed via `ouverture.py run`
+- Functions can only be executed via `mobius.py run`
 - No standalone distribution mechanism
 - Dependencies must be resolved at runtime
 
@@ -372,7 +372,7 @@ tests/
 
 ```bash
 # Generate standalone executable for current platform
-ouverture.py compile abc123...@eng --output ./myapp
+mobius.py compile abc123...@eng --output ./myapp
 
 # Run the executable
 ./myapp
@@ -388,7 +388,7 @@ ouverture.py compile abc123...@eng --output ./myapp
 
 **New Functions**:
 1. `dependencies_resolve(func_hash) -> List[str]`
-   - Parse ouverture imports from normalized code
+   - Parse mobius imports from normalized code
    - Recursively resolve dependencies
    - Return topologically sorted list of hashes
 
@@ -426,7 +426,7 @@ ouverture.py compile abc123...@eng --output ./myapp
 ```python
 #!/usr/bin/env python3
 import sys
-from ouverture.runtime import execute_function
+from mobius.runtime import execute_function
 
 if __name__ == "__main__":
     result = execute_function("FUNC_HASH", "LANG", sys.argv[1:])
@@ -478,7 +478,7 @@ Week 5:   Compilation (6 days)
 
 3. **Git Remotes third**: Core infrastructure for sharing functions across teams/projects
 
-4. **Compilation fourth**: Enables distribution of ouverture functions as standalone tools
+4. **Compilation fourth**: Enables distribution of mobius functions as standalone tools
 
 ---
 
@@ -581,7 +581,7 @@ Before starting each feature:
 
 ## Conclusion
 
-Priority 0 represents the next major milestone for Ouverture, transforming it from a local tool to a distributed function sharing platform. The recommended implementation order prioritizes:
+Priority 0 represents the next major milestone for Mobius, transforming it from a local tool to a distributed function sharing platform. The recommended implementation order prioritizes:
 
 1. **Foundation** (Test Reorganization, Async) - Enable confident development
 2. **Distribution** (Git Remotes, Compilation) - Enable sharing and deployment

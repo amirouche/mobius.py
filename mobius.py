@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ouverture - A function pool manager for Python code
+mobius - A function pool manager for Python code
 """
 import ast
 import argparse
@@ -17,10 +17,10 @@ from typing import Dict, Set, Tuple, List, Union
 # Get all Python built-in names
 PYTHON_BUILTINS = set(dir(builtins))
 
-# Prefix for ouverture.pool imports to ensure valid Python identifiers
+# Prefix for mobius.pool imports to ensure valid Python identifiers
 # SHA256 hashes can start with digits (0-9), which are invalid as Python identifiers
 # By prefixing with "object_", we ensure all import names are valid
-OUVERTURE_IMPORT_PREFIX = "object_"
+MOBIUS_IMPORT_PREFIX = "object_"
 
 
 class ASTNormalizer(ast.NodeTransformer):
@@ -144,15 +144,15 @@ def function_extract_definition(tree: ast.Module) -> Tuple[Union[ast.FunctionDef
 
 
 def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef], imports: List[ast.stmt],
-                        ouverture_aliases: Set[str] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
+                        mobius_aliases: Set[str] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Create mapping from original names to normalized names.
     Returns (forward_mapping, reverse_mapping)
-    Forward: original -> _ouverture_v_X
-    Reverse: _ouverture_v_X -> original
+    Forward: original -> _mobius_v_X
+    Reverse: _mobius_v_X -> original
     """
-    if ouverture_aliases is None:
-        ouverture_aliases = set()
+    if mobius_aliases is None:
+        mobius_aliases = set()
 
     imported_names = set()
     for imp in imports:
@@ -167,17 +167,17 @@ def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDe
     reverse_mapping = {}
     counter = 0
 
-    # Function name is always _ouverture_v_0
-    forward_mapping[function_def.name] = '_ouverture_v_0'
-    reverse_mapping['_ouverture_v_0'] = function_def.name
+    # Function name is always _mobius_v_0
+    forward_mapping[function_def.name] = '_mobius_v_0'
+    reverse_mapping['_mobius_v_0'] = function_def.name
     counter += 1
 
-    # Collect all names in the function (excluding imported names, built-ins, and ouverture aliases)
+    # Collect all names in the function (excluding imported names, built-ins, and mobius aliases)
     all_names = set()
     for node in ast.walk(function_def):
-        if isinstance(node, ast.Name) and node.id not in imported_names and node.id not in PYTHON_BUILTINS and node.id not in ouverture_aliases:
+        if isinstance(node, ast.Name) and node.id not in imported_names and node.id not in PYTHON_BUILTINS and node.id not in mobius_aliases:
             all_names.add(node.id)
-        elif isinstance(node, ast.arg) and node.arg not in imported_names and node.arg not in PYTHON_BUILTINS and node.arg not in ouverture_aliases:
+        elif isinstance(node, ast.arg) and node.arg not in imported_names and node.arg not in PYTHON_BUILTINS and node.arg not in mobius_aliases:
             all_names.add(node.arg)
 
     # Remove function name as it's already mapped
@@ -185,7 +185,7 @@ def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDe
 
     # Sort names for consistent mapping
     for name in sorted(all_names):
-        normalized = f'_ouverture_v_{counter}'
+        normalized = f'_mobius_v_{counter}'
         forward_mapping[name] = normalized
         reverse_mapping[normalized] = name
         counter += 1
@@ -193,33 +193,33 @@ def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDe
     return forward_mapping, reverse_mapping
 
 
-def imports_rewrite_ouverture(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
+def imports_rewrite_mobius(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
     """
-    Remove aliases from 'ouverture' imports and track them for later restoration.
+    Remove aliases from 'mobius' imports and track them for later restoration.
     Returns (new_imports, alias_mapping)
     alias_mapping maps: actual_function_hash (without prefix) -> alias_in_lang
 
     Input format expected:
-        from ouverture.pool import object_c0ff33 as kawa
+        from mobius.pool import object_c0ff33 as kawa
 
     Output:
-        - import becomes: from ouverture.pool import object_c0ff33
+        - import becomes: from mobius.pool import object_c0ff33
         - alias_mapping stores: {"c0ff33...": "kawa"} (actual hash without object_ prefix)
     """
     new_imports = []
     alias_mapping = {}
 
     for imp in imports:
-        if isinstance(imp, ast.ImportFrom) and imp.module == 'ouverture.pool':
-            # Rewrite: from ouverture.pool import object_c0ffeebad as kawa
-            # To: from ouverture.pool import object_c0ffeebad
+        if isinstance(imp, ast.ImportFrom) and imp.module == 'mobius.pool':
+            # Rewrite: from mobius.pool import object_c0ffeebad as kawa
+            # To: from mobius.pool import object_c0ffeebad
             new_names = []
             for alias in imp.names:
                 import_name = alias.name  # e.g., "object_c0ff33..."
 
                 # Extract actual hash by stripping the prefix
-                if import_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                    actual_hash = import_name[len(OUVERTURE_IMPORT_PREFIX):]
+                if import_name.startswith(MOBIUS_IMPORT_PREFIX):
+                    actual_hash = import_name[len(MOBIUS_IMPORT_PREFIX):]
                 else:
                     # Backward compatibility: no prefix (shouldn't happen in new code)
                     actual_hash = import_name
@@ -232,7 +232,7 @@ def imports_rewrite_ouverture(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
                 new_names.append(ast.alias(name=import_name, asname=None))
 
             new_imp = ast.ImportFrom(
-                module='ouverture.pool',
+                module='mobius.pool',
                 names=new_names,
                 level=0
             )
@@ -243,30 +243,30 @@ def imports_rewrite_ouverture(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
     return new_imports, alias_mapping
 
 
-def calls_replace_ouverture(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
+def calls_replace_mobius(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
     """
-    Replace calls to aliased ouverture functions.
-    E.g., kawa(...) becomes object_c0ffeebad._ouverture_v_0(...)
+    Replace calls to aliased mobius functions.
+    E.g., kawa(...) becomes object_c0ffeebad._mobius_v_0(...)
 
     alias_mapping maps actual hash (without prefix) -> alias name
     The replacement uses object_<hash> to match the import name.
     """
-    class OuvertureCallReplacer(ast.NodeTransformer):
+    class MobiusCallReplacer(ast.NodeTransformer):
         def visit_Name(self, node):
-            # If this name is an alias for an ouverture function
+            # If this name is an alias for an mobius function
             for func_hash, alias in alias_mapping.items():
                 if node.id == alias:
-                    # Replace with object_c0ffeebad._ouverture_v_0
+                    # Replace with object_c0ffeebad._mobius_v_0
                     # Use prefixed name to match the import statement
-                    prefixed_name = OUVERTURE_IMPORT_PREFIX + func_hash
+                    prefixed_name = MOBIUS_IMPORT_PREFIX + func_hash
                     return ast.Attribute(
                         value=ast.Name(id=prefixed_name, ctx=ast.Load()),
-                        attr='_ouverture_v_0',
+                        attr='_mobius_v_0',
                         ctx=node.ctx
                     )
             return node
 
-    replacer = OuvertureCallReplacer()
+    replacer = MobiusCallReplacer()
     return replacer.visit(tree)
 
 
@@ -306,7 +306,7 @@ def docstring_extract(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef]
 
 def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
     """
-    Normalize the AST according to ouverture rules.
+    Normalize the AST according to mobius rules.
     Returns (normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping)
     """
     # Sort imports
@@ -318,14 +318,14 @@ def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
     # Extract docstring from function
     docstring, function_without_docstring = docstring_extract(function_def)
 
-    # Rewrite ouverture imports
-    imports, alias_mapping = imports_rewrite_ouverture(imports)
+    # Rewrite mobius imports
+    imports, alias_mapping = imports_rewrite_mobius(imports)
 
-    # Get the set of ouverture aliases (values in alias_mapping)
-    ouverture_aliases = set(alias_mapping.values())
+    # Get the set of mobius aliases (values in alias_mapping)
+    mobius_aliases = set(alias_mapping.values())
 
     # Create name mapping
-    forward_mapping, reverse_mapping = mapping_create_name(function_def, imports, ouverture_aliases)
+    forward_mapping, reverse_mapping = mapping_create_name(function_def, imports, mobius_aliases)
 
     # Create two modules: one with docstring (for display) and one without (for hashing)
     module_with_docstring = ast.Module(body=imports + [function_def], type_ignores=[])
@@ -333,8 +333,8 @@ def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
 
     # Process both modules identically
     for module in [module_with_docstring, module_without_docstring]:
-        # Replace ouverture calls with their normalized form
-        module = calls_replace_ouverture(module, alias_mapping, forward_mapping)
+        # Replace mobius calls with their normalized form
+        module = calls_replace_mobius(module, alias_mapping, forward_mapping)
 
         # Normalize names
         normalizer = ASTNormalizer(forward_mapping)
@@ -386,7 +386,7 @@ def mapping_compute_hash(docstring: str, name_mapping: Dict[str, str],
     Args:
         docstring: The function docstring for this mapping
         name_mapping: Normalized name -> original name mapping
-        alias_mapping: Ouverture function hash -> alias mapping
+        alias_mapping: Mobius function hash -> alias mapping
         comment: Optional comment explaining this mapping variant
 
     Returns:
@@ -410,31 +410,23 @@ def schema_detect_version(func_hash: str) -> int:
     """
     Detect the schema version of a stored function.
 
-    Checks the filesystem to determine if a function is stored in v0 or v1 format:
-    - v0: $OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json
-    - v1: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+    Checks the filesystem to determine if a function is stored in v1 format:
+    - v1: $MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
 
     Args:
         func_hash: The function hash to check
 
     Returns:
-        0 for v0 format, 1 for v1 format, None if function not found
+        1 for v1 format, None if function not found
     """
     pool_dir = directory_get_pool()
 
-    # Check for v1 format first (function directory with object.json)
+    # Check for v1 format (function directory with object.json)
     v1_func_dir = pool_dir / 'sha256' / func_hash[:2] / func_hash[2:]
     v1_object_json = v1_func_dir / 'object.json'
 
     if v1_object_json.exists():
         return 1
-
-    # Check for v0 format (JSON file)
-    v0_hash_dir = pool_dir / func_hash[:2]
-    v0_json_path = v0_hash_dir / f'{func_hash[2:]}.json'
-
-    if v0_json_path.exists():
-        return 0
 
     # Function not found
     return None
@@ -469,44 +461,44 @@ def metadata_create() -> Dict[str, any]:
     }
 
 
-def directory_get_ouverture() -> Path:
+def directory_get_mobius() -> Path:
     """
-    Get the ouverture base directory from environment variable or default to '$HOME/.local/ouverture/'.
-    Environment variable: OUVERTURE_DIRECTORY
+    Get the mobius base directory from environment variable or default to '$HOME/.local/mobius/'.
+    Environment variable: MOBIUS_DIRECTORY
 
     Directory structure:
-        $OUVERTURE_DIRECTORY/
+        $MOBIUS_DIRECTORY/
         ├── pool/          # Pool directory (git repository for objects)
         │   └── sha256/    # Hash algorithm prefix
         │       └── XX/    # First 2 chars of hash
         └── config.json    # Configuration file
     """
-    env_dir = os.environ.get('OUVERTURE_DIRECTORY')
+    env_dir = os.environ.get('MOBIUS_DIRECTORY')
     if env_dir:
         return Path(env_dir)
-    # Default to $HOME/.local/ouverture/
+    # Default to $HOME/.local/mobius/
     home = os.environ.get('HOME', os.path.expanduser('~'))
-    return Path(home) / '.local' / 'ouverture'
+    return Path(home) / '.local' / 'mobius'
 
 
 def directory_get_pool() -> Path:
     """
     Get the pool directory (git repository) where objects are stored.
-    Returns: $OUVERTURE_DIRECTORY/pool/
+    Returns: $MOBIUS_DIRECTORY/pool/
     """
-    return directory_get_ouverture() / 'pool'
+    return directory_get_mobius() / 'pool'
 
 
 def config_get_path() -> Path:
     """
     Get the path to the config file.
-    Config is stored in $OUVERTURE_DIRECTORY/config.json
-    Can be overridden with OUVERTURE_CONFIG_PATH environment variable for testing.
+    Config is stored in $MOBIUS_DIRECTORY/config.json
+    Can be overridden with MOBIUS_CONFIG_PATH environment variable for testing.
     """
-    config_override = os.environ.get('OUVERTURE_CONFIG_PATH')
+    config_override = os.environ.get('MOBIUS_CONFIG_PATH')
     if config_override:
         return Path(config_override)
-    return directory_get_ouverture() / 'config.json'
+    return directory_get_mobius() / 'config.json'
 
 
 def config_read() -> Dict[str, any]:
@@ -552,9 +544,9 @@ def config_write(config: Dict[str, any]):
 
 def command_init():
     """
-    Initialize ouverture directory and config file.
+    Initialize mobius directory and config file.
     """
-    ouverture_dir = directory_get_ouverture()
+    mobius_dir = directory_get_mobius()
 
     # Create pool directory (git repository for objects)
     pool_dir = directory_get_pool()
@@ -577,7 +569,7 @@ def command_init():
         config_write(config)
         print(f"Created config file: {config_path}")
 
-    print(f"Initialized ouverture directory: {ouverture_dir}")
+    print(f"Initialized mobius directory: {mobius_dir}")
 
 
 def command_whoami(subcommand: str, value: list = None):
@@ -629,56 +621,13 @@ def command_whoami(subcommand: str, value: list = None):
             print(f"Set {subcommand}: {value[0]}")
 
 
-def function_save_v0(hash_value: str, lang: str, normalized_code: str, docstring: str,
-                     name_mapping: Dict[str, str], alias_mapping: Dict[str, str]):
-    """
-    Save the function to the ouverture objects directory using schema v0.
-
-    This function is kept for the migration tool and backward compatibility.
-    New code should use function_save_v1() instead.
-    """
-    # Create directory structure: OUVERTURE_DIR/objects/XX/
-    pool_dir = directory_get_pool()
-    hash_dir = pool_dir / hash_value[:2]
-    hash_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create JSON file path
-    json_path = hash_dir / f'{hash_value[2:]}.json'
-
-    # Check if file exists and load existing data
-    if json_path.exists():
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    else:
-        data = {
-            'version': 0,
-            'hash': hash_value,
-            'normalized_code': normalized_code,
-            'docstrings': {},
-            'name_mappings': {},
-            'alias_mappings': {}
-        }
-
-    # Add language-specific data
-    data['docstrings'][lang] = docstring
-    data['name_mappings'][lang] = name_mapping
-    data['alias_mappings'][lang] = alias_mapping
-
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-    print(f"Function saved: {json_path}")
-    print(f"Hash: {hash_value}")
-    print(f"Language: {lang}")
-
-
 def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]):
     """
-    Save function to ouverture directory using schema v1.
+    Save function to mobius directory using schema v1.
 
     Creates the function directory and object.json file:
-    - Directory: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../
-    - File: $OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+    - Directory: $MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../
+    - File: $MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
 
     Args:
         hash_value: Function hash (64-character hex)
@@ -714,11 +663,11 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
                    name_mapping: Dict[str, str], alias_mapping: Dict[str, str],
                    comment: str = "") -> str:
     """
-    Save language mapping to ouverture directory using schema v1.
+    Save language mapping to mobius directory using schema v1.
 
     Creates the mapping directory and mapping.json file:
-    - Directory: $OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../
-    - File: $OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json
+    - Directory: $MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../
+    - File: $MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json
 
     The mapping is content-addressed, enabling deduplication.
 
@@ -727,7 +676,7 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
         lang: Language code (e.g., "eng", "fra")
         docstring: Function docstring for this language
         name_mapping: Normalized name -> original name mapping
-        alias_mapping: Ouverture function hash -> alias mapping
+        alias_mapping: Mobius function hash -> alias mapping
         comment: Optional comment explaining this mapping variant
 
     Returns:
@@ -766,7 +715,7 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
 def function_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
                   name_mapping: Dict[str, str], alias_mapping: Dict[str, str], comment: str = ""):
     """
-    Save function to ouverture directory using schema v1 (current default).
+    Save function to mobius directory using schema v1 (current default).
 
     This is the main entry point for saving functions. It uses schema v1 format.
 
@@ -776,7 +725,7 @@ def function_save(hash_value: str, lang: str, normalized_code: str, docstring: s
         normalized_code: Normalized code with docstring
         docstring: Function docstring for this language
         name_mapping: Normalized name -> original name mapping
-        alias_mapping: Ouverture function hash -> alias mapping
+        alias_mapping: Mobius function hash -> alias mapping
         comment: Optional comment explaining this mapping variant
     """
     # Create metadata
@@ -792,7 +741,7 @@ def function_save(hash_value: str, lang: str, normalized_code: str, docstring: s
 def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_mapping: Dict[str, str]) -> str:
     """
     Denormalize code by applying reverse name mappings.
-    name_mapping: maps normalized names (_ouverture_v_X) to original names
+    name_mapping: maps normalized names (_mobius_v_X) to original names
     alias_mapping: maps actual hash IDs (without object_ prefix) to alias names
 
     Normalized code uses object_<hash> in imports and attributes.
@@ -834,13 +783,13 @@ def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_m
             return node
 
         def visit_Attribute(self, node):
-            # Replace object_c0ffeebad._ouverture_v_0(...) with alias(...)
+            # Replace object_c0ffeebad._mobius_v_0(...) with alias(...)
             if (isinstance(node.value, ast.Name) and
-                node.attr == '_ouverture_v_0'):
+                node.attr == '_mobius_v_0'):
                 prefixed_name = node.value.id
                 # Strip object_ prefix to get actual hash
-                if prefixed_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                    actual_hash = prefixed_name[len(OUVERTURE_IMPORT_PREFIX):]
+                if prefixed_name.startswith(MOBIUS_IMPORT_PREFIX):
+                    actual_hash = prefixed_name[len(MOBIUS_IMPORT_PREFIX):]
                 else:
                     actual_hash = prefixed_name  # Backward compatibility
 
@@ -851,17 +800,17 @@ def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_m
             return node
 
         def visit_ImportFrom(self, node):
-            # Add aliases back to 'from ouverture.pool import object_X'
-            if node.module == 'ouverture.pool':
-                node.module = 'ouverture.pool'
+            # Add aliases back to 'from mobius.pool import object_X'
+            if node.module == 'mobius.pool':
+                node.module = 'mobius.pool'
                 # Add aliases back
                 new_names = []
                 for alias_node in node.names:
                     import_name = alias_node.name  # e.g., "object_c0ff33..."
 
                     # Strip object_ prefix to get actual hash
-                    if import_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                        actual_hash = import_name[len(OUVERTURE_IMPORT_PREFIX):]
+                    if import_name.startswith(MOBIUS_IMPORT_PREFIX):
+                        actual_hash = import_name[len(MOBIUS_IMPORT_PREFIX):]
                     else:
                         actual_hash = import_name  # Backward compatibility
 
@@ -1001,8 +950,8 @@ def git_cache_path(remote_name: str) -> Path:
     Returns:
         Path to the cached repository directory
     """
-    ouverture_dir = directory_get_ouverture()
-    return ouverture_dir / 'cache' / 'git' / remote_name
+    mobius_dir = directory_get_mobius()
+    return mobius_dir / 'cache' / 'git' / remote_name
 
 
 def git_clone_or_fetch(git_url: str, local_path: Path) -> bool:
@@ -1334,7 +1283,7 @@ def command_remote_push(name: str):
 
         # Commit and push changes
         print(f"Committing {pushed_count} new functions...")
-        commit_msg = f"Add {pushed_count} function(s) from ouverture push"
+        commit_msg = f"Add {pushed_count} function(s) from mobius push"
         if not git_commit_and_push(cache_path, commit_msg):
             print("Error: Failed to commit and push changes", file=sys.stderr)
             sys.exit(1)
@@ -1349,7 +1298,7 @@ def command_remote_push(name: str):
 
 def dependencies_extract(normalized_code: str) -> List[str]:
     """
-    Extract ouverture dependencies from normalized code.
+    Extract mobius dependencies from normalized code.
 
     Returns:
         List of actual function hashes (without object_ prefix) that this function depends on
@@ -1358,12 +1307,12 @@ def dependencies_extract(normalized_code: str) -> List[str]:
     tree = ast.parse(normalized_code)
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == 'ouverture.pool':
+        if isinstance(node, ast.ImportFrom) and node.module == 'mobius.pool':
             for alias in node.names:
                 import_name = alias.name  # e.g., "object_c0ff33..."
                 # Strip object_ prefix to get actual hash
-                if import_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                    actual_hash = import_name[len(OUVERTURE_IMPORT_PREFIX):]
+                if import_name.startswith(MOBIUS_IMPORT_PREFIX):
+                    actual_hash = import_name[len(MOBIUS_IMPORT_PREFIX):]
                 else:
                     actual_hash = import_name  # Backward compatibility
                 dependencies.append(actual_hash)
@@ -1397,18 +1346,9 @@ def dependencies_resolve(func_hash: str) -> List[str]:
         if version is None:
             raise ValueError(f"Function not found: {hash_value}")
 
-        # Load function to get its code
-        if version == 0:
-            # v0: Load from single JSON file
-            pool_dir = directory_get_pool()
-            func_path = pool_dir / hash_value[:2] / f'{hash_value[2:]}.json'
-            with open(func_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            normalized_code = data.get('normalized_code', '')
-        else:
-            # v1: Load from object.json
-            func_data = function_load_v1(hash_value)
-            normalized_code = func_data['normalized_code']
+        # Load function to get its code (v1 only)
+        func_data = function_load_v1(hash_value)
+        normalized_code = func_data['normalized_code']
 
         # Extract and visit dependencies first
         deps = dependencies_extract(normalized_code)
@@ -1447,18 +1387,11 @@ def dependencies_bundle(hashes: List[str], output_dir: Path) -> Path:
         if version is None:
             raise ValueError(f"Function not found: {func_hash}")
 
-        if version == 0:
-            # v0: Copy single JSON file
-            src = pool_dir / func_hash[:2] / f'{func_hash[2:]}.json'
-            dst = output_objects / func_hash[:2] / f'{func_hash[2:]}.json'
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-        else:
-            # v1: Copy entire function directory
-            src_dir = pool_dir / 'sha256' / func_hash[:2] / func_hash[2:]
-            dst_dir = output_objects / 'sha256' / func_hash[:2] / func_hash[2:]
-            if src_dir.exists():
-                shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
+        # Copy entire function directory (v1 only)
+        src_dir = pool_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+        dst_dir = output_objects / 'sha256' / func_hash[:2] / func_hash[2:]
+        if src_dir.exists():
+            shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
 
     return output_dir
 
@@ -1512,7 +1445,7 @@ def command_review(hash_value: str):
         for lang in preferred_langs:
             try:
                 normalized_code, name_mapping, alias_mapping, docstring = function_load(current_hash, lang)
-                func_name = name_mapping.get('_ouverture_v_0', 'unknown')
+                func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
                 # Show function
                 print(f"Function: {func_name} ({lang})")
@@ -1600,36 +1533,10 @@ def command_log():
                         'hash': func_hash,
                         'created': created,
                         'author': author,
-                        'langs': sorted(langs),
-                        'version': 1
+                        'langs': sorted(langs)
                     })
                 except (IOError, json.JSONDecodeError):
                     continue
-
-    # Scan for v0 functions (objects/XX/YYY.json)
-    for hash_prefix_dir in pool_dir.iterdir():
-        if not hash_prefix_dir.is_dir():
-            continue
-        if hash_prefix_dir.name == 'sha256':
-            continue
-
-        for json_file in hash_prefix_dir.glob('*.json'):
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
-                func_hash = data['hash']
-                langs = list(data.get('name_mappings', {}).keys())
-
-                functions.append({
-                    'hash': func_hash,
-                    'created': 'unknown',
-                    'author': 'unknown',
-                    'langs': sorted(langs),
-                    'version': 0
-                })
-            except (IOError, json.JSONDecodeError):
-                continue
 
     # Sort by created timestamp (newest first)
     functions.sort(key=lambda x: x['created'], reverse=True)
@@ -1641,12 +1548,10 @@ def command_log():
 
     for func in functions:
         langs_str = ', '.join(func['langs']) if func['langs'] else 'none'
-        version_str = f"v{func['version']}"
         print(f"Hash: {func['hash']}")
         print(f"Date: {func['created']}")
         print(f"Author: {func['author']}")
         print(f"Languages: {langs_str}")
-        print(f"Schema: {version_str}")
         print()
 
 
@@ -1705,7 +1610,7 @@ def command_search(query: List[str]):
                                 lang = lang_dir.name
                                 try:
                                     _, name_mapping, _, docstring = function_load(func_hash, lang)
-                                    func_name = name_mapping.get('_ouverture_v_0', 'unknown')
+                                    func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
                                     # Check if search term in function name or docstring
                                     match_in = []
@@ -1729,50 +1634,6 @@ def command_search(query: List[str]):
                 except (IOError, json.JSONDecodeError):
                     continue
 
-    # Scan for v0 functions
-    for hash_prefix_dir in pool_dir.iterdir():
-        if not hash_prefix_dir.is_dir():
-            continue
-        if hash_prefix_dir.name == 'sha256':
-            continue
-
-        for json_file in hash_prefix_dir.glob('*.json'):
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
-                func_hash = data['hash']
-                normalized_code = data['normalized_code']
-
-                # Search in code
-                code_lower = normalized_code.lower()
-                if any(term in code_lower for term in search_terms):
-                    # Get first available language
-                    langs = list(data.get('name_mappings', {}).keys())
-                    if langs:
-                        lang = langs[0]
-                        name_mapping = data['name_mappings'][lang]
-                        docstring = data.get('docstrings', {}).get(lang, '')
-                        func_name = name_mapping.get('_ouverture_v_0', 'unknown')
-
-                        match_in = []
-                        if any(term in func_name.lower() for term in search_terms):
-                            match_in.append('name')
-                        if any(term in docstring.lower() for term in search_terms):
-                            match_in.append('docstring')
-                        if not match_in:
-                            match_in.append('code')
-
-                        results.append({
-                            'hash': func_hash,
-                            'name': func_name,
-                            'lang': lang,
-                            'docstring': docstring[:100],
-                            'match_in': match_in
-                        })
-            except (IOError, json.JSONDecodeError):
-                continue
-
     # Display results
     print(f"Search Results ({len(results)} matches for: {' '.join(query)})")
     print("=" * 80)
@@ -1789,28 +1650,28 @@ def command_search(query: List[str]):
         print(f"Match: {match_str}")
         if result['docstring']:
             print(f"Description: {result['docstring']}...")
-        print(f"View: ouverture.py show {result['hash']}@{result['lang']}")
+        print(f"View: mobius.py show {result['hash']}@{result['lang']}")
         print()
 
 
-def code_strip_ouverture_imports(code: str) -> str:
+def code_strip_mobius_imports(code: str) -> str:
     """
-    Strip ouverture.pool import statements from code.
+    Strip mobius.pool import statements from code.
 
     These imports are handled separately by loading dependencies into the namespace.
 
     Args:
-        code: Source code with possible ouverture.pool imports
+        code: Source code with possible mobius.pool imports
 
     Returns:
-        Code with ouverture.pool imports removed
+        Code with mobius.pool imports removed
     """
     tree = ast.parse(code)
 
-    # Filter out ouverture.pool imports
+    # Filter out mobius.pool imports
     new_body = []
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module == 'ouverture.pool':
+        if isinstance(node, ast.ImportFrom) and node.module == 'mobius.pool':
             continue
         new_body.append(node)
 
@@ -1823,7 +1684,7 @@ def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, load
     Recursively load a function and all its dependencies into a namespace.
 
     Creates a module-like object for each dependency that can be accessed as:
-    object_HASH._ouverture_v_0(args) -> alias(args)
+    object_HASH._mobius_v_0(args) -> alias(args)
 
     Args:
         func_hash: Actual function hash (without object_ prefix) to load
@@ -1839,7 +1700,7 @@ def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, load
 
     if func_hash in loaded:
         # Already loaded, return the existing module (stored with prefix)
-        prefixed_name = OUVERTURE_IMPORT_PREFIX + func_hash
+        prefixed_name = MOBIUS_IMPORT_PREFIX + func_hash
         return namespace.get(prefixed_name)
 
     loaded.add(func_hash)
@@ -1860,18 +1721,18 @@ def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, load
     normalized_code_with_doc = docstring_replace(normalized_code, docstring)
     original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
 
-    # Strip ouverture imports (dependencies are already in namespace)
-    executable_code = code_strip_ouverture_imports(original_code)
+    # Strip mobius imports (dependencies are already in namespace)
+    executable_code = code_strip_mobius_imports(original_code)
 
     # For each alias in alias_mapping, add the dependency function to namespace with that name
     # alias_mapping maps actual_hash -> alias
     for dep_hash, alias in alias_mapping.items():
-        prefixed_dep_name = OUVERTURE_IMPORT_PREFIX + dep_hash
+        prefixed_dep_name = MOBIUS_IMPORT_PREFIX + dep_hash
         if prefixed_dep_name in namespace:
             # The dependency's function is already loaded, make alias point to it
             dep_module = namespace[prefixed_dep_name]
-            if hasattr(dep_module, '_ouverture_v_0'):
-                namespace[alias] = dep_module._ouverture_v_0
+            if hasattr(dep_module, '_mobius_v_0'):
+                namespace[alias] = dep_module._mobius_v_0
 
     # Execute the code in the namespace (dependencies are already loaded)
     try:
@@ -1883,17 +1744,17 @@ def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, load
         sys.exit(1)
 
     # Get function name and create a module-like object for this hash
-    func_name = name_mapping.get('_ouverture_v_0', 'unknown')
+    func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
     if func_name in namespace:
-        # Create a simple namespace object that has _ouverture_v_0 attribute
+        # Create a simple namespace object that has _mobius_v_0 attribute
         # Store it under the prefixed name (object_<hash>) for lookup
-        class OuvertureModule:
+        class MobiusModule:
             pass
 
-        module = OuvertureModule()
-        module._ouverture_v_0 = namespace[func_name]
-        prefixed_name = OUVERTURE_IMPORT_PREFIX + func_hash
+        module = MobiusModule()
+        module._mobius_v_0 = namespace[func_name]
+        prefixed_name = MOBIUS_IMPORT_PREFIX + func_hash
         namespace[prefixed_name] = module
 
     return namespace.get(func_name)
@@ -1936,7 +1797,7 @@ def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None
         sys.exit(1)
 
     # Get function name from mapping
-    func_name = name_mapping.get('_ouverture_v_0', 'unknown_function')
+    func_name = name_mapping.get('_mobius_v_0', 'unknown_function')
 
     # Create execution namespace
     namespace = {}
@@ -1959,18 +1820,18 @@ def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None
     print("=" * 60)
     print()
 
-    # Strip ouverture imports (dependencies are already in namespace)
-    executable_code = code_strip_ouverture_imports(original_code)
+    # Strip mobius imports (dependencies are already in namespace)
+    executable_code = code_strip_mobius_imports(original_code)
 
     # For each alias in alias_mapping, add the dependency function to namespace with that name
     # alias_mapping maps actual_hash (without prefix) -> alias
     for dep_hash, alias in alias_mapping.items():
-        prefixed_dep_name = OUVERTURE_IMPORT_PREFIX + dep_hash
+        prefixed_dep_name = MOBIUS_IMPORT_PREFIX + dep_hash
         if prefixed_dep_name in namespace:
             # The dependency's function is already loaded, make alias point to it
             dep_module = namespace[prefixed_dep_name]
-            if hasattr(dep_module, '_ouverture_v_0'):
-                namespace[alias] = dep_module._ouverture_v_0
+            if hasattr(dep_module, '_mobius_v_0'):
+                namespace[alias] = dep_module._mobius_v_0
 
     # Execute the code
     try:
@@ -2118,12 +1979,12 @@ def command_translate(hash_with_lang: str, target_lang: str):
 
     print()
     print(f"Translation saved: {hash_value}@{target_lang}")
-    print(f"View with: ouverture.py show {hash_value}@{target_lang}")
+    print(f"View with: mobius.py show {hash_value}@{target_lang}")
 
 
 def function_add(file_path_with_lang: str, comment: str = ""):
     """
-    Add a function to the ouverture pool using schema v1.
+    Add a function to the mobius pool using schema v1.
 
     Args:
         file_path_with_lang: File path with language suffix (e.g., "file.py@eng")
@@ -2211,52 +2072,9 @@ def docstring_replace(code: str, new_docstring: str) -> str:
     return ast.unparse(tree)
 
 
-def function_load_v0(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
-    """
-    Load a function from the ouverture pool using schema v0.
-
-    This function is kept for backward compatibility with v0 format.
-    New code should use function_load() which dispatches to v0 or v1.
-
-    Returns (normalized_code, name_mapping, alias_mapping, docstring)
-    """
-    # Build file path using configurable ouverture directory
-    pool_dir = directory_get_pool()
-    hash_dir = pool_dir / hash_value[:2]
-    json_path = hash_dir / f'{hash_value[2:]}.json'
-
-    # Check if file exists
-    if not json_path.exists():
-        print(f"Error: Function not found: {hash_value}", file=sys.stderr)
-        sys.exit(1)
-
-    # Load the JSON data
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"Error: Failed to parse JSON file: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # Check if language exists in the data
-    if lang not in data['name_mappings']:
-        available_langs = ', '.join(data['name_mappings'].keys())
-        print(f"Error: Language '{lang}' not found for this function.", file=sys.stderr)
-        print(f"Available languages: {available_langs}", file=sys.stderr)
-        sys.exit(1)
-
-    # Get the normalized code and mappings for the requested language
-    normalized_code = data['normalized_code']
-    name_mapping = data['name_mappings'][lang]
-    alias_mapping = data.get('alias_mappings', {}).get(lang, {})
-    docstring = data.get('docstrings', {}).get(lang, '')
-
-    return normalized_code, name_mapping, alias_mapping, docstring
-
-
 def function_load_v1(hash_value: str) -> Dict[str, any]:
     """
-    Load function from ouverture directory using schema v1.
+    Load function from mobius directory using schema v1.
 
     Loads only the object.json file (no language-specific data).
 
@@ -2390,14 +2208,12 @@ def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str) -> Tuple[str, 
 
 def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
     """
-    Load a function from the ouverture pool (dispatch to v0 or v1).
-
-    Detects the schema version and routes to the appropriate loader.
+    Load a function from the mobius pool (v1 format only).
 
     Args:
         hash_value: Function hash (64-character hex)
         lang: Language code (e.g., "eng", "fra")
-        mapping_hash: Optional mapping hash for v1 (64-character hex)
+        mapping_hash: Optional mapping hash (64-character hex)
 
     Returns:
         Tuple of (normalized_code, name_mapping, alias_mapping, docstring)
@@ -2409,49 +2225,40 @@ def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple
         print(f"Error: Function not found: {hash_value}", file=sys.stderr)
         sys.exit(1)
 
-    if version == 0:
-        # Load v0 format (backward compatibility)
-        return function_load_v0(hash_value, lang)
+    # Load v1 format
+    # Load object.json
+    func_data = function_load_v1(hash_value)
+    normalized_code = func_data['normalized_code']
 
-    elif version == 1:
-        # Load v1 format
-        # Load object.json
-        func_data = function_load_v1(hash_value)
-        normalized_code = func_data['normalized_code']
+    # Get available mappings
+    mappings = mappings_list_v1(hash_value, lang)
 
-        # Get available mappings
-        mappings = mappings_list_v1(hash_value, lang)
-
-        if len(mappings) == 0:
-            print(f"Error: No mappings found for language '{lang}'", file=sys.stderr)
-            sys.exit(1)
-
-        # Determine which mapping to load
-        if mapping_hash is not None:
-            # Explicit mapping requested
-            selected_hash = mapping_hash
-        elif len(mappings) == 1:
-            # Only one mapping available
-            selected_hash, _ = mappings[0]
-        else:
-            # Multiple mappings available - pick first alphabetically for now
-            # (Phase 5 will improve this with a selection menu)
-            mappings_sorted = sorted(mappings, key=lambda x: x[0])
-            selected_hash, _ = mappings_sorted[0]
-
-        # Load the mapping
-        docstring, name_mapping, alias_mapping, comment = mapping_load_v1(hash_value, lang, selected_hash)
-
-        return normalized_code, name_mapping, alias_mapping, docstring
-
-    else:
-        print(f"Error: Unsupported schema version: {version}", file=sys.stderr)
+    if len(mappings) == 0:
+        print(f"Error: No mappings found for language '{lang}'", file=sys.stderr)
         sys.exit(1)
+
+    # Determine which mapping to load
+    if mapping_hash is not None:
+        # Explicit mapping requested
+        selected_hash = mapping_hash
+    elif len(mappings) == 1:
+        # Only one mapping available
+        selected_hash, _ = mappings[0]
+    else:
+        # Multiple mappings available - pick first alphabetically for now
+        # (Phase 5 will improve this with a selection menu)
+        mappings_sorted = sorted(mappings, key=lambda x: x[0])
+        selected_hash, _ = mappings_sorted[0]
+
+    # Load the mapping
+    docstring, name_mapping, alias_mapping, comment = mapping_load_v1(hash_value, lang, selected_hash)
+
+    return normalized_code, name_mapping, alias_mapping, docstring
 
 
 def function_show(hash_with_lang_and_mapping: str):
     """
-    Show a function from the ouverture pool with mapping selection support.
+    Show a function from the mobius pool with mapping selection support.
 
     Supports three formats:
     - HASH@LANG: Show single mapping, or menu if multiple exist
@@ -2490,24 +2297,6 @@ def function_show(hash_with_lang_and_mapping: str):
         print(f"Error: Function not found: {hash_value}", file=sys.stderr)
         sys.exit(1)
 
-    # Handle v0 functions (always single mapping per language)
-    if version == 0:
-        # v0 functions always have exactly one mapping per language
-        normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang)
-
-        # Replace docstring and denormalize
-        try:
-            normalized_code = docstring_replace(normalized_code, docstring)
-            original_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
-        except Exception as e:
-            print(f"Error: Failed to denormalize code: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        # Print the code
-        print(original_code)
-        return
-
-    # Handle v1 functions
     # Get available mappings for the language
     mappings = mappings_list_v1(hash_value, lang)
 
@@ -2527,7 +2316,7 @@ def function_show(hash_with_lang_and_mapping: str):
         print(f"Multiple mappings found for '{lang}'. Please choose one:\n")
         for m_hash, comment in sorted(mappings):
             comment_suffix = f"  # {comment}" if comment else ""
-            print(f"ouverture.py show {hash_value}@{lang}@{m_hash}{comment_suffix}")
+            print(f"mobius.py show {hash_value}@{lang}@{m_hash}{comment_suffix}")
         return
 
     # Load the selected mapping
@@ -2546,7 +2335,7 @@ def function_show(hash_with_lang_and_mapping: str):
 
 
 def function_get(hash_with_lang: str):
-    """Get a function from the ouverture pool (backward compatible with show command)"""
+    """Get a function from the mobius pool (backward compatible with show command)"""
     # Parse the hash and language
     if '@' not in hash_with_lang:
         print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
@@ -2583,175 +2372,6 @@ def function_get(hash_with_lang: str):
 
     # Print the code
     print(original_code)
-
-
-def code_migrate_add_object_prefix(normalized_code: str) -> str:
-    """
-    Migrate normalized code from v0 format (no object_ prefix) to v1 format (with object_ prefix).
-
-    Transforms:
-    - from ouverture.pool import c0ff33 -> from ouverture.pool import object_c0ff33
-    - c0ff33._ouverture_v_0(...) -> object_c0ff33._ouverture_v_0(...)
-
-    Args:
-        normalized_code: Normalized code in v0 format (imports without object_ prefix)
-
-    Returns:
-        Migrated code with object_ prefix added to ouverture imports and calls
-    """
-    tree = ast.parse(normalized_code)
-
-    class PrefixAdder(ast.NodeTransformer):
-        def visit_ImportFrom(self, node):
-            if node.module == 'ouverture.pool':
-                # Add object_ prefix to import names
-                new_names = []
-                for alias in node.names:
-                    # Only add prefix if not already present
-                    if not alias.name.startswith(OUVERTURE_IMPORT_PREFIX):
-                        new_name = OUVERTURE_IMPORT_PREFIX + alias.name
-                    else:
-                        new_name = alias.name
-                    new_names.append(ast.alias(name=new_name, asname=alias.asname))
-                node.names = new_names
-            return node
-
-        def visit_Attribute(self, node):
-            # Transform hash._ouverture_v_0 -> object_hash._ouverture_v_0
-            if (isinstance(node.value, ast.Name) and
-                node.attr == '_ouverture_v_0' and
-                not node.value.id.startswith(OUVERTURE_IMPORT_PREFIX)):
-                # Check if this looks like a hash (64 hex chars or at least looks like one)
-                # Add object_ prefix
-                node.value.id = OUVERTURE_IMPORT_PREFIX + node.value.id
-            self.generic_visit(node)
-            return node
-
-    transformer = PrefixAdder()
-    tree = transformer.visit(tree)
-    ast.fix_missing_locations(tree)
-
-    return ast.unparse(tree)
-
-
-def schema_migrate_function_v0_to_v1(func_hash: str, keep_v0: bool = False):
-    """
-    Migrate a single function from schema v0 to v1.
-
-    Args:
-        func_hash: Function hash (64-character hex)
-        keep_v0: If True, keep the v0 file after migration (default: False)
-    """
-    # Verify it's a v0 function
-    version = schema_detect_version(func_hash)
-    if version != 0:
-        print(f"Error: Function {func_hash} is not in v0 format (version: {version})", file=sys.stderr)
-        sys.exit(1)
-
-    # Load v0 data
-    pool_dir = directory_get_pool()
-    v0_path = pool_dir / func_hash[:2] / f'{func_hash[2:]}.json'
-
-    try:
-        with open(v0_path, 'r', encoding='utf-8') as f:
-            v0_data = json.load(f)
-    except (IOError, json.JSONDecodeError) as e:
-        print(f"Error: Failed to load v0 data: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # Extract normalized code and migrate to add object_ prefix
-    normalized_code = v0_data['normalized_code']
-    migrated_code = code_migrate_add_object_prefix(normalized_code)
-
-    # Create metadata for v1
-    metadata = metadata_create()
-
-    # Save function in v1 format (object.json only) with migrated code
-    function_save_v1(func_hash, migrated_code, metadata)
-
-    # Migrate each language mapping
-    for lang in v0_data.get('name_mappings', {}).keys():
-        docstring = v0_data.get('docstrings', {}).get(lang, '')
-        name_mapping = v0_data['name_mappings'][lang]
-        alias_mapping = v0_data.get('alias_mappings', {}).get(lang, {})
-
-        # Save mapping in v1 format
-        mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment='')
-
-    # Validate migration
-    is_valid, errors = schema_validate_v1(func_hash)
-    if not is_valid:
-        print(f"Error: Migration validation failed for {func_hash}:", file=sys.stderr)
-        for error in errors:
-            print(f"  - {error}", file=sys.stderr)
-        sys.exit(1)
-
-    # Delete v0 file if requested
-    if not keep_v0:
-        try:
-            v0_path.unlink()
-            # Try to remove parent directory if empty
-            try:
-                v0_path.parent.rmdir()
-            except OSError:
-                pass  # Directory not empty, that's fine
-        except IOError as e:
-            print(f"Warning: Failed to delete v0 file: {e}", file=sys.stderr)
-
-    print(f"Migrated {func_hash} from v0 to v1 (keep_v0={keep_v0})")
-
-
-def schema_migrate_all_v0_to_v1(keep_v0: bool = False, dry_run: bool = False) -> list:
-    """
-    Migrate all v0 functions to v1.
-
-    Args:
-        keep_v0: If True, keep v0 files after migration (default: False)
-        dry_run: If True, only report what would be migrated without actually migrating (default: False)
-
-    Returns:
-        List of function hashes that were (or would be) migrated
-    """
-    pool_dir = directory_get_pool()
-
-    # Find all v0 files
-    v0_functions = []
-    if not pool_dir.exists():
-        return v0_functions
-
-    for hash_prefix_dir in pool_dir.iterdir():
-        if not hash_prefix_dir.is_dir():
-            continue
-        if hash_prefix_dir.name == 'sha256':
-            # Skip v1 algorithm directory
-            continue
-
-        for json_file in hash_prefix_dir.glob('*.json'):
-            # Reconstruct hash
-            func_hash = hash_prefix_dir.name + json_file.stem
-
-            # Verify it's v0
-            version = schema_detect_version(func_hash)
-            if version == 0:
-                v0_functions.append(func_hash)
-
-    if dry_run:
-        print(f"Dry run: Would migrate {len(v0_functions)} functions")
-        for func_hash in v0_functions:
-            print(f"  - {func_hash}")
-        return v0_functions
-
-    # Migrate each function
-    print(f"Migrating {len(v0_functions)} functions from v0 to v1...")
-    for func_hash in v0_functions:
-        try:
-            schema_migrate_function_v0_to_v1(func_hash, keep_v0=keep_v0)
-        except Exception as e:
-            print(f"Error migrating {func_hash}: {e}", file=sys.stderr)
-            # Continue with other functions
-
-    print(f"Migration complete. Migrated {len(v0_functions)} functions.")
-    return v0_functions
 
 
 def schema_validate_v1(func_hash: str) -> tuple:
@@ -2824,7 +2444,7 @@ def command_caller(hash_value: str):
     """
     Find all functions that depend on the given function.
 
-    Scans all functions in the pool and prints `ouverture.py show CALLER_HASH`
+    Scans all functions in the pool and prints `mobius.py show CALLER_HASH`
     for each function that imports the given hash.
 
     Args:
@@ -2877,31 +2497,9 @@ def command_caller(hash_value: str):
                 except (IOError, json.JSONDecodeError):
                     continue
 
-    # Scan for v0 functions (objects/XX/YYY.json)
-    for hash_prefix_dir in pool_dir.iterdir():
-        if not hash_prefix_dir.is_dir():
-            continue
-        if hash_prefix_dir.name == 'sha256':
-            continue
-
-        for json_file in hash_prefix_dir.glob('*.json'):
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
-                func_hash = data['hash']
-                normalized_code = data['normalized_code']
-
-                # Check if this function depends on the target hash
-                deps = dependencies_extract(normalized_code)
-                if hash_value in deps:
-                    callers.append(func_hash)
-            except (IOError, json.JSONDecodeError):
-                continue
-
     # Print results
     for caller_hash in sorted(callers):
-        print(f"ouverture.py show {caller_hash}")
+        print(f"mobius.py show {caller_hash}")
 
 
 def command_refactor(what_hash: str, from_hash: str, to_hash: str):
@@ -2935,27 +2533,16 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
         print(f"Error: Target function not found: {to_hash}", file=sys.stderr)
         sys.exit(1)
 
-    # Load the function's normalized code
-    if what_version == 0:
-        pool_dir = directory_get_pool()
-        pool_dir = pool_dir
-        v0_path = pool_dir / what_hash[:2] / f'{what_hash[2:]}.json'
-        with open(v0_path, 'r', encoding='utf-8') as f:
-            what_data = json.load(f)
-        normalized_code = what_data['normalized_code']
-        # Get all languages from v0 data
-        languages = list(what_data.get('name_mappings', {}).keys())
-    else:
-        func_data = function_load_v1(what_hash)
-        normalized_code = func_data['normalized_code']
-        # Get all languages from v1 directory structure
-        pool_dir = directory_get_pool()
-        pool_dir = pool_dir
-        func_dir = pool_dir / 'sha256' / what_hash[:2] / what_hash[2:]
-        languages = []
-        for item in func_dir.iterdir():
-            if item.is_dir() and len(item.name) == 3:
-                languages.append(item.name)
+    # Load the function's normalized code (v1 only)
+    func_data = function_load_v1(what_hash)
+    normalized_code = func_data['normalized_code']
+    # Get all languages from v1 directory structure
+    pool_dir = directory_get_pool()
+    func_dir = pool_dir / 'sha256' / what_hash[:2] / what_hash[2:]
+    languages = []
+    for item in func_dir.iterdir():
+        if item.is_dir() and len(item.name) == 3:
+            languages.append(item.name)
 
     # Check that the function actually depends on from_hash
     deps = dependencies_extract(normalized_code)
@@ -2968,19 +2555,19 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
 
     class DependencyReplacer(ast.NodeTransformer):
         def visit_ImportFrom(self, node):
-            if node.module == 'ouverture.pool':
+            if node.module == 'mobius.pool':
                 new_names = []
                 for alias in node.names:
                     import_name = alias.name
                     # Check if this is the from_hash import
-                    if import_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                        actual_hash = import_name[len(OUVERTURE_IMPORT_PREFIX):]
+                    if import_name.startswith(MOBIUS_IMPORT_PREFIX):
+                        actual_hash = import_name[len(MOBIUS_IMPORT_PREFIX):]
                     else:
                         actual_hash = import_name
 
                     if actual_hash == from_hash:
                         # Replace with to_hash
-                        new_name = OUVERTURE_IMPORT_PREFIX + to_hash
+                        new_name = MOBIUS_IMPORT_PREFIX + to_hash
                         new_names.append(ast.alias(name=new_name, asname=alias.asname))
                     else:
                         new_names.append(alias)
@@ -2988,17 +2575,17 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
             return node
 
         def visit_Attribute(self, node):
-            # Transform object_from_hash._ouverture_v_0 -> object_to_hash._ouverture_v_0
+            # Transform object_from_hash._mobius_v_0 -> object_to_hash._mobius_v_0
             if (isinstance(node.value, ast.Name) and
-                node.attr == '_ouverture_v_0'):
+                node.attr == '_mobius_v_0'):
                 prefixed_name = node.value.id
-                if prefixed_name.startswith(OUVERTURE_IMPORT_PREFIX):
-                    actual_hash = prefixed_name[len(OUVERTURE_IMPORT_PREFIX):]
+                if prefixed_name.startswith(MOBIUS_IMPORT_PREFIX):
+                    actual_hash = prefixed_name[len(MOBIUS_IMPORT_PREFIX):]
                 else:
                     actual_hash = prefixed_name
 
                 if actual_hash == from_hash:
-                    node.value.id = OUVERTURE_IMPORT_PREFIX + to_hash
+                    node.value.id = MOBIUS_IMPORT_PREFIX + to_hash
             self.generic_visit(node)
             return node
 
@@ -3029,13 +2616,11 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
     # Save the new function (object.json)
     function_save_v1(new_hash, new_normalized_code, metadata)
 
-    # Copy all language mappings from what_hash to new_hash
+    # Copy all language mappings from what_hash to new_hash (v1 only)
     for lang in languages:
-        if what_version == 0:
-            docstring = what_data.get('docstrings', {}).get(lang, '')
-            name_mapping = what_data['name_mappings'][lang]
-            alias_mapping = what_data.get('alias_mappings', {}).get(lang, {})
-            comment = ''
+        mappings = mappings_list_v1(what_hash, lang)
+        for mapping_hash, comment in mappings:
+            docstring, name_mapping, alias_mapping, comment = mapping_load_v1(what_hash, lang, mapping_hash)
 
             # Update alias_mapping: replace from_hash key with to_hash
             new_alias_mapping = {}
@@ -3046,24 +2631,9 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
                     new_alias_mapping[dep_hash] = alias
 
             mapping_save_v1(new_hash, lang, docstring, name_mapping, new_alias_mapping, comment)
-        else:
-            # v1: get all mappings for this language
-            mappings = mappings_list_v1(what_hash, lang)
-            for mapping_hash, comment in mappings:
-                docstring, name_mapping, alias_mapping, comment = mapping_load_v1(what_hash, lang, mapping_hash)
-
-                # Update alias_mapping: replace from_hash key with to_hash
-                new_alias_mapping = {}
-                for dep_hash, alias in alias_mapping.items():
-                    if dep_hash == from_hash:
-                        new_alias_mapping[to_hash] = alias
-                    else:
-                        new_alias_mapping[dep_hash] = alias
-
-                mapping_save_v1(new_hash, lang, docstring, name_mapping, new_alias_mapping, comment)
 
     # Print the result command
-    print(f"ouverture.py show {new_hash}")
+    print(f"mobius.py show {new_hash}")
 
 
 # =============================================================================
@@ -3083,7 +2653,7 @@ def compile_generate_config(func_hash: str, lang: str, output_name: str) -> str:
         PyOxidizer configuration as a string
     """
     return f'''# PyOxidizer configuration for {output_name}
-# Generated by ouverture.py compile
+# Generated by mobius.py compile
 
 def make_dist():
     return default_python_distribution()
@@ -3094,8 +2664,8 @@ def make_exe(dist):
 import sys
 sys.path.insert(0, '.')
 
-# Import ouverture runtime
-from ouverture_runtime import execute_function
+# Import mobius runtime
+from mobius_runtime import execute_function
 
 # Execute the function
 result = execute_function('{func_hash}', '{lang}', sys.argv[1:])
@@ -3110,7 +2680,7 @@ if result is not None:
 
     exe.add_python_resource(dist.read_package_root(
         path=".",
-        packages=["ouverture_runtime"],
+        packages=["mobius_runtime"],
     ))
 
     return exe
@@ -3134,7 +2704,7 @@ resolve_targets()
 
 def compile_generate_runtime(func_hash: str, lang: str, output_dir: Path) -> Path:
     """
-    Generate the ouverture runtime module for the compiled executable.
+    Generate the mobius runtime module for the compiled executable.
 
     Args:
         func_hash: Function hash to compile
@@ -3144,12 +2714,12 @@ def compile_generate_runtime(func_hash: str, lang: str, output_dir: Path) -> Pat
     Returns:
         Path to the generated runtime module
     """
-    runtime_dir = output_dir / 'ouverture_runtime'
+    runtime_dir = output_dir / 'mobius_runtime'
     runtime_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy the necessary parts of ouverture for runtime
+    # Copy the necessary parts of mobius for runtime
     runtime_code = '''"""
-Ouverture Runtime - Minimal runtime for compiled functions
+Mobius Runtime - Minimal runtime for compiled functions
 """
 import ast
 import json
@@ -3158,7 +2728,7 @@ import sys
 from pathlib import Path
 
 
-OUVERTURE_IMPORT_PREFIX = "object_"
+MOBIUS_IMPORT_PREFIX = "object_"
 
 
 def directory_get_bundle() -> Path:
@@ -3285,7 +2855,7 @@ def execute_function(func_hash: str, lang: str, args: list):
     exec(denormalized_code, namespace)
 
     # Find the function in namespace
-    func_name = name_mapping.get('_ouverture_v_0', '_ouverture_v_0')
+    func_name = name_mapping.get('_mobius_v_0', '_mobius_v_0')
     func = namespace.get(func_name)
 
     if func is None:
@@ -3373,7 +2943,7 @@ def command_compile(hash_with_lang: str, output_path: str = None):
     print(f"  Found {len(deps)} function(s) to bundle")
 
     # Create build directory
-    build_dir = Path(f'.ouverture_build_{func_hash[:8]}')
+    build_dir = Path(f'.mobius_build_{func_hash[:8]}')
     build_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -3388,7 +2958,7 @@ def command_compile(hash_with_lang: str, output_path: str = None):
 
         # Generate PyOxidizer config
         print("Generating PyOxidizer configuration...")
-        output_name = output_path if output_path else f'ouverture_{func_hash[:8]}'
+        output_name = output_path if output_path else f'mobius_{func_hash[:8]}'
         config = compile_generate_config(func_hash, lang, output_name)
 
         config_path = build_dir / 'pyoxidizer.bzl'
@@ -3432,11 +3002,11 @@ def command_compile(hash_with_lang: str, output_path: str = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='ouverture - Function pool manager')
+    parser = argparse.ArgumentParser(description='mobius - Function pool manager')
     subparsers = parser.add_subparsers(dest='command', help='Commands')
 
     # Init command
-    init_parser = subparsers.add_parser('init', help='Initialize ouverture directory and config')
+    init_parser = subparsers.add_parser('init', help='Initialize mobius directory and config')
 
     # Whoami command
     whoami_parser = subparsers.add_parser('whoami', help='Get or set user configuration')
@@ -3503,12 +3073,6 @@ def main():
     remote_push_parser = remote_subparsers.add_parser('push', help='Publish functions to remote')
     remote_push_parser.add_argument('name', help='Remote name to push to')
 
-    # Migrate command
-    migrate_parser = subparsers.add_parser('migrate', help='Migrate functions from v0 to v1')
-    migrate_parser.add_argument('hash', nargs='?', help='Specific function hash to migrate (optional, migrates all if omitted)')
-    migrate_parser.add_argument('--keep-v0', action='store_true', help='Keep v0 files after migration')
-    migrate_parser.add_argument('--dry-run', action='store_true', help='Show what would be migrated without actually migrating')
-
     # Validate command
     validate_parser = subparsers.add_parser('validate', help='Validate v1 function structure')
     validate_parser.add_argument('hash', help='Function hash to validate')
@@ -3563,13 +3127,6 @@ def main():
             command_remote_push(args.name)
         else:
             remote_parser.print_help()
-    elif args.command == 'migrate':
-        if args.hash:
-            # Migrate specific function
-            schema_migrate_function_v0_to_v1(args.hash, keep_v0=args.keep_v0)
-        else:
-            # Migrate all functions
-            schema_migrate_all_v0_to_v1(keep_v0=args.keep_v0, dry_run=args.dry_run)
     elif args.command == 'validate':
         is_valid, errors = schema_validate_v1(args.hash)
         if is_valid:

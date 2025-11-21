@@ -1,18 +1,18 @@
-# ouverture.py
+# mobius.py
 
-![Tests](https://github.com/amirouche/ouverture.py/actions/workflows/test.yml/badge.svg)
+![Tests](https://github.com/amirouche/mobius.py/actions/workflows/test.yml/badge.svg)
 
 **Beyond Babel, Python all around the world, one function at a time**
 
-Write functions in your language. Share logic universally. Ouverture creates bridges through shared logic—not by erasing differences, but by recognizing equivalence where it naturally emerges.
+Write functions in your language. Share logic universally. Mobius creates bridges through shared logic—not by erasing differences, but by recognizing equivalence where it naturally emerges.
 
-Ouverture is a function pool where the same code written in different human languages produces the same hash.
+Mobius is a function pool where the same code written in different human languages produces the same hash.
 
 ## The Idea
 
 What if you could write `calculer_somme` in French, `calcular_suma` in Spanish, or `calculate_sum` in English—and they all map to the same function in a shared pool? What if code could be language-agnostic for machines while remaining native for humans?
 
-Ouverture is a function pool where **the same logic written in different human languages shares the same hash**. A French developer can write:
+Mobius is a function pool where **the same logic written in different human languages shares the same hash**. A French developer can write:
 
 ```python
 def calculer_moyenne(nombres):
@@ -40,7 +40,7 @@ def calculate_average(numbers):
 
 ## Not About Blockchain
 
-**Important clarification**: Ouverture is **not related to Bitcoin, blockchain, or cryptocurrency** in any way. Yes, we use content-addressed storage and hashing. No, this is not a blockchain project.
+**Important clarification**: Mobius is **not related to Bitcoin, blockchain, or cryptocurrency** in any way. Yes, we use content-addressed storage and hashing. No, this is not a blockchain project.
 
 The vision is about **multilingual programming and code reuse**, not distributed ledgers or tokens. Content-addressed storage existed long before blockchain (see: Git, which we use daily). The value proposition is:
 - Enabling programmers to think in their native languages
@@ -51,10 +51,10 @@ This vision holds value completely independent of blockchain technology. We're b
 
 ## How It Works
 
-Ouverture normalizes Python functions by:
+Mobius normalizes Python functions by:
 1. Parsing code to an Abstract Syntax Tree (AST)
 2. Extracting docstrings (language-specific)
-3. Renaming variables to canonical forms (`_ouverture_v_0`, `_ouverture_v_1`, etc.)
+3. Renaming variables to canonical forms (`_mobius_v_0`, `_mobius_v_1`, etc.)
 4. Computing a hash on the **logic only** (excluding docstrings)
 5. Storing both the normalized code and language-specific name mappings
 
@@ -62,14 +62,14 @@ When you retrieve a function, it's reconstructed in your target language:
 
 ```bash
 # Add functions in different languages
-python3 ouverture.py add examples/example_simple.py@eng
-python3 ouverture.py add examples/example_simple_french.py@fra
-python3 ouverture.py add examples/example_simple_spanish.py@spa
+python3 mobius.py add examples/example_simple.py@eng
+python3 mobius.py add examples/example_simple_french.py@fra
+python3 mobius.py add examples/example_simple_spanish.py@spa
 
 # All three produce the same hash!
 # Retrieve in any language
-python3 ouverture.py get <HASH>@fra  # Returns French version
-python3 ouverture.py get <HASH>@spa  # Returns Spanish version
+python3 mobius.py get <HASH>@fra  # Returns French version
+python3 mobius.py get <HASH>@spa  # Returns Spanish version
 ```
 
 ## Why This Matters
@@ -87,7 +87,7 @@ This is research software. The current implementation:
 - ✅ Generates deterministic hashes for equivalent logic
 - ✅ Stores multilingual variants in content-addressed pool
 - ✅ Reconstructs code in target language
-- ⚠️ Has known bugs (e.g., `couverture` typo in imports)
+- ⚠️ Has known bugs (e.g., typos in imports)
 - ⚠️ Limited to Python (for now)
 - ⚠️ No semantic understanding (purely syntactic)
 
@@ -100,14 +100,14 @@ cat examples/example_simple_french.py   # French
 cat examples/example_simple_spanish.py  # Spanish
 
 # Add a function to the pool
-python3 ouverture.py add examples/example_simple.py@eng
+python3 mobius.py add examples/example_simple.py@eng
 
-# Get the hash (stored in $HOME/.local/ouverture/objects/ by default)
-# Note: Use $OUVERTURE_DIRECTORY to customize the location
-find ~/.local/ouverture/objects -name "*.json"
+# Get the hash (stored in $HOME/.local/mobius/objects/ by default)
+# Note: Use $MOBIUS_DIRECTORY to customize the location
+find ~/.local/mobius/objects -name "*.json"
 
 # Retrieve in different language
-python3 ouverture.py get <HASH>@fra
+python3 mobius.py get <HASH>@fra
 ```
 
 ## Examples
@@ -154,18 +154,18 @@ Import names (`Counter`) are preserved, variable names (`items`) are normalized.
 Functions can reference other functions from the pool:
 
 ```python
-from ouverture.pool import abc123def as helper
+from mobius.pool import abc123def as helper
 
 def process_data(values):
     """Process data using helper function"""
     return helper(values)
 ```
 
-The import is normalized to `from ouverture.pool import abc123def`, making it language-agnostic.
+The import is normalized to `from mobius.pool import abc123def`, making it language-agnostic.
 
-## Why "Ouverture"?
+## Why "Mobius"?
 
-French for "opening" or "overture" - the beginning of something larger. A door that was previously closed. Also a nod to the multilingual nature of the project.
+Mobius refers to the Mobius strip - a surface with only one side, representing the continuous transformation between languages and the unity of code logic regardless of linguistic expression. Just as the Mobius strip has no boundary between its "sides," Mobius code has no boundary between languages: the same logic flows seamlessly from French to English to Spanish and back.
 
 ## Origins, Vision & Philosophy
 
@@ -177,7 +177,7 @@ This idea has been brewing for over a decade, long before the current LLM revolu
 
 ### The Bigger Picture
 
-If Ouverture succeeds, it could become infrastructure like npmjs—but with **less friction, less drama, and fewer barriers**. The irony? The vision remains relevant even without LLMs. The core idea—content-addressable, multilingual code—stands on its own.
+If Mobius succeeds, it could become infrastructure like npmjs—but with **less friction, less drama, and fewer barriers**. The irony? The vision remains relevant even without LLMs. The core idea—content-addressable, multilingual code—stands on its own.
 
 This explains why the hash-on-logic-not-names design is so critical—it's not just a technical detail, it's the **enabler of the entire multilingual vision**. A French developer writing `calculer_somme(nombres)` and an English developer writing `calculate_sum(numbers)` are contributing the **same** function to the same pool.
 
@@ -185,14 +185,14 @@ This explains why the hash-on-logic-not-names design is so critical—it's not j
 
 Code is thought made explicit. Language shapes thought. If code can only be "readable" in one language, we're limiting who can think clearly in code.
 
-As AI systems trained predominantly on English codebases become ubiquitous, there's a subtle risk: we might optimize code for machine readability while narrowing the range of human expression. Ouverture explores whether we can have both—tools that work *with* multilingual thinking instead of requiring everyone to think the same way.
+As AI systems trained predominantly on English codebases become ubiquitous, there's a subtle risk: we might optimize code for machine readability while narrowing the range of human expression. Mobius explores whether we can have both—tools that work *with* multilingual thinking instead of requiring everyone to think the same way.
 
-That's the opening ("ouverture"): a door that was previously closed, now made possible.
+That's the Mobius transformation: code that flows continuously between linguistic perspectives, recognizing their unity.
 
 ## Architecture
 
-- **Single file**: `ouverture.py` (~600 lines)
-- **Storage**: `$HOME/.local/ouverture/objects/XX/YYYYYY.json` (content-addressed, configurable via `OUVERTURE_DIRECTORY`)
+- **Single file**: `mobius.py` (~600 lines)
+- **Storage**: `$HOME/.local/mobius/objects/XX/YYYYYY.json` (content-addressed, configurable via `MOBIUS_DIRECTORY`)
 - **Language codes**: ISO 639-3 (eng, fra, spa, etc.)
 - **Hash algorithm**: SHA256 on normalized AST
 
@@ -216,7 +216,7 @@ We especially welcome:
 
 ## Known Issues
 
-- **Only functions are supported**: Classes and methods cannot be stored by ouverture (only standalone functions)
+- **Only functions are supported**: Classes and methods cannot be stored by mobius (only standalone functions)
 - Only supports Python 3.9+ (requires `ast.unparse()`)
 - Limited testing on edge cases
 - No package distribution yet

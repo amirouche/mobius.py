@@ -6,7 +6,7 @@ Integration tests for CLI commands (remote add/list/remove/pull/push).
 """
 import pytest
 
-import ouverture
+import mobius
 
 
 # =============================================================================
@@ -15,32 +15,32 @@ import ouverture
 
 def test_remote_type_detect_file():
     """Test detecting file:// remote type"""
-    assert ouverture.remote_type_detect("file:///path/to/pool") == "file"
+    assert mobius.remote_type_detect("file:///path/to/pool") == "file"
 
 
 def test_remote_type_detect_git_ssh():
     """Test detecting git SSH remote type"""
-    assert ouverture.remote_type_detect("git@github.com:user/repo.git") == "git-ssh"
+    assert mobius.remote_type_detect("git@github.com:user/repo.git") == "git-ssh"
 
 
 def test_remote_type_detect_git_https():
     """Test detecting git HTTPS remote type"""
-    assert ouverture.remote_type_detect("git+https://github.com/user/repo.git") == "git-https"
+    assert mobius.remote_type_detect("git+https://github.com/user/repo.git") == "git-https"
 
 
 def test_remote_type_detect_git_file():
     """Test detecting local git remote type"""
-    assert ouverture.remote_type_detect("git+file:///path/to/repo") == "git-file"
+    assert mobius.remote_type_detect("git+file:///path/to/repo") == "git-file"
 
 
 def test_remote_type_detect_unknown():
     """Test detecting unknown remote type"""
-    assert ouverture.remote_type_detect("ftp://example.com") == "unknown"
+    assert mobius.remote_type_detect("ftp://example.com") == "unknown"
 
 
 def test_git_url_parse_ssh():
     """Test parsing SSH Git URL"""
-    result = ouverture.git_url_parse("git@github.com:user/repo.git")
+    result = mobius.git_url_parse("git@github.com:user/repo.git")
     assert result['protocol'] == 'ssh'
     assert result['host'] == 'github.com'
     assert result['git_url'] == 'git@github.com:user/repo.git'
@@ -48,14 +48,14 @@ def test_git_url_parse_ssh():
 
 def test_git_url_parse_https():
     """Test parsing HTTPS Git URL"""
-    result = ouverture.git_url_parse("git+https://github.com/user/repo.git")
+    result = mobius.git_url_parse("git+https://github.com/user/repo.git")
     assert result['protocol'] == 'https'
     assert result['git_url'] == 'https://github.com/user/repo.git'
 
 
 def test_git_url_parse_file():
     """Test parsing file Git URL"""
-    result = ouverture.git_url_parse("git+file:///home/user/repo")
+    result = mobius.git_url_parse("git+file:///home/user/repo")
     assert result['protocol'] == 'file'
     assert result['git_url'] == 'file:///home/user/repo'
 
@@ -63,7 +63,7 @@ def test_git_url_parse_file():
 def test_git_url_parse_invalid():
     """Test parsing invalid Git URL raises error"""
     with pytest.raises(ValueError):
-        ouverture.git_url_parse("invalid://url")
+        mobius.git_url_parse("invalid://url")
 
 
 # =============================================================================
@@ -171,7 +171,7 @@ def test_remote_pull_file(cli_runner, tmp_path):
     # Create a minimal v1 function
     func_dir = remote_objects / ("c123" + "0" * 56)
     func_dir.mkdir()
-    (func_dir / "object.json").write_text('{"schema_version": 1, "normalized_code": "def _ouverture_v_0(): pass"}')
+    (func_dir / "object.json").write_text('{"schema_version": 1, "normalized_code": "def _mobius_v_0(): pass"}')
 
     # Add remote and pull
     cli_runner.run(['remote', 'add', 'source', f'file://{remote_pool}'])

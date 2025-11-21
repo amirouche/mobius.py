@@ -1,11 +1,11 @@
 """
-Shared pytest fixtures for ouverture tests.
+Shared pytest fixtures for mobius tests.
 
 This module provides common fixtures used across all test modules.
 
 Test Philosophy:
 - Most tests should be integration tests (grey-box style)
-- Setup: Use CLI commands (ouverture.py add, init, etc.)
+- Setup: Use CLI commands (mobius.py add, init, etc.)
 - Test: Call CLI commands
 - Assert: Check CLI output and/or files directly
 - Unit tests only for complex low-level aspects (AST, hashing, schema, migration)
@@ -17,13 +17,13 @@ from pathlib import Path
 
 import pytest
 
-# Add parent directory to path so we can import ouverture
+# Add parent directory to path so we can import mobius
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import ouverture
+import mobius
 
 # Export fixtures and helpers
-__all__ = ['normalize_code_for_test', 'mock_ouverture_dir', 'sample_function_code',
+__all__ = ['normalize_code_for_test', 'mock_mobius_dir', 'sample_function_code',
            'sample_function_file', 'sample_async_function_code', 'sample_async_function_file',
            'cli_run', 'cli_runner']
 
@@ -33,36 +33,36 @@ def normalize_code_for_test(code: str) -> str:
     Normalize code string to match ast.unparse() output format.
 
     All normalized code strings in tests MUST go through this function to ensure
-    they match the format that ouverture produces. This is because ast.unparse()
+    they match the format that mobius produces. This is because ast.unparse()
     always outputs code with proper line breaks and indentation, regardless of
     the input format.
 
     The function:
     1. Parses code into AST
-    2. Clears all line/column information recursively (using ouverture.ast_clear_locations)
+    2. Clears all line/column information recursively (using mobius.ast_clear_locations)
     3. Fixes missing locations
     4. Unparses back to string
 
     Example:
         # Wrong - this format never exists in practice:
-        normalized_code = "def _ouverture_v_0(): return 42"
+        normalized_code = "def _mobius_v_0(): return 42"
 
         # Correct - use this helper:
-        normalized_code = normalize_code_for_test("def _ouverture_v_0(): return 42")
-        # Returns: "def _ouverture_v_0():\\n    return 42"
+        normalized_code = normalize_code_for_test("def _mobius_v_0(): return 42")
+        # Returns: "def _mobius_v_0():\\n    return 42"
     """
     tree = ast.parse(code)
-    ouverture.ast_clear_locations(tree)
+    mobius.ast_clear_locations(tree)
     ast.fix_missing_locations(tree)
     return ast.unparse(tree)
 
 
 def cli_run(args: list, env: dict = None, cwd: str = None) -> subprocess.CompletedProcess:
     """
-    Run ouverture.py CLI command.
+    Run mobius.py CLI command.
 
     Args:
-        args: Command arguments (without 'python ouverture.py' prefix)
+        args: Command arguments (without 'python mobius.py' prefix)
         env: Environment variables (merged with current env)
         cwd: Working directory
 
@@ -76,7 +76,7 @@ def cli_run(args: list, env: dict = None, cwd: str = None) -> subprocess.Complet
     """
     import os
 
-    cmd = [sys.executable, str(Path(__file__).parent.parent / 'ouverture.py')] + args
+    cmd = [sys.executable, str(Path(__file__).parent.parent / 'mobius.py')] + args
 
     run_env = os.environ.copy()
     if env:
@@ -92,24 +92,24 @@ def cli_run(args: list, env: dict = None, cwd: str = None) -> subprocess.Complet
 
 
 class CLIRunner:
-    """Helper class for running CLI commands with a specific ouverture directory.
+    """Helper class for running CLI commands with a specific mobius directory.
 
     Directory structure:
-        ouverture_dir/
+        mobius_dir/
         ├── pool/          # Pool directory (git repository)
         │   └── sha256/    # Hash algorithm prefix
         └── config.json    # Configuration file
     """
 
-    def __init__(self, ouverture_dir: Path):
-        self.ouverture_dir = ouverture_dir
-        self.pool_dir = ouverture_dir / 'pool'
+    def __init__(self, mobius_dir: Path):
+        self.mobius_dir = mobius_dir
+        self.pool_dir = mobius_dir / 'pool'
         self.env = {
-            'OUVERTURE_DIRECTORY': str(ouverture_dir)
+            'MOBIUS_DIRECTORY': str(mobius_dir)
         }
 
     def run(self, args: list, cwd: str = None) -> subprocess.CompletedProcess:
-        """Run CLI command with this runner's ouverture directory."""
+        """Run CLI command with this runner's mobius directory."""
         return cli_run(args, env=self.env, cwd=cwd)
 
     def add(self, file_path: str, lang: str) -> str:
@@ -139,49 +139,49 @@ class CLIRunner:
 
 
 @pytest.fixture
-def mock_ouverture_dir(tmp_path, monkeypatch):
+def mock_mobius_dir(tmp_path, monkeypatch):
     """
     Fixture to monkey patch directory functions to return a temp directory.
     This ensures tests work with pytest-xdist (parallel test runner).
 
     Directory structure:
-        tmp_path/.ouverture/
+        tmp_path/.mobius/
         ├── pool/          # Pool directory
         │   └── sha256/    # Hash algorithm prefix
         └── config.json    # Configuration file
     """
-    base_dir = tmp_path / '.ouverture'
+    base_dir = tmp_path / '.mobius'
     pool_dir = base_dir / 'pool'
 
-    def _get_temp_ouverture_dir():
+    def _get_temp_mobius_dir():
         return base_dir
 
     def _get_temp_pool_dir():
         return pool_dir
 
-    monkeypatch.setattr(ouverture, 'directory_get_ouverture', _get_temp_ouverture_dir)
-    monkeypatch.setattr(ouverture, 'directory_get_pool', _get_temp_pool_dir)
+    monkeypatch.setattr(mobius, 'directory_get_mobius', _get_temp_mobius_dir)
+    monkeypatch.setattr(mobius, 'directory_get_pool', _get_temp_pool_dir)
     return tmp_path
 
 
 @pytest.fixture
 def cli_runner(tmp_path):
     """
-    Fixture providing a CLIRunner with isolated ouverture directory.
+    Fixture providing a CLIRunner with isolated mobius directory.
 
     Use this for integration tests that call CLI commands.
     Creates the directory structure:
-        tmp_path/.ouverture/
+        tmp_path/.mobius/
         ├── pool/           # Pool directory
         │   └── sha256/     # Hash algorithm prefix
         └── config.json     # Configuration file
     """
-    ouverture_dir = tmp_path / '.ouverture'
-    pool_dir = ouverture_dir / 'pool'
+    mobius_dir = tmp_path / '.mobius'
+    pool_dir = mobius_dir / 'pool'
 
     pool_dir.mkdir(parents=True, exist_ok=True)
 
-    return CLIRunner(ouverture_dir)
+    return CLIRunner(mobius_dir)
 
 
 @pytest.fixture

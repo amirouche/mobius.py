@@ -1,5 +1,5 @@
 """
-Internal tests for ouverture.py
+Internal tests for mobius.py
 
 Tests for core functionality that doesn't map directly to CLI commands:
 - AST normalization and transformation
@@ -19,7 +19,7 @@ import pytest
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import ouverture
+import mobius
 
 from tests.conftest import normalize_code_for_test
 
@@ -30,57 +30,57 @@ from tests.conftest import normalize_code_for_test
 
 def test_ast_normalizer_visit_name_with_mapping():
     """Test that Name nodes are renamed according to mapping"""
-    mapping = {"x": "_ouverture_v_1", "y": "_ouverture_v_2"}
-    normalizer = ouverture.ASTNormalizer(mapping)
+    mapping = {"x": "_mobius_v_1", "y": "_mobius_v_2"}
+    normalizer = mobius.ASTNormalizer(mapping)
 
     code = "z = x + y"
     tree = ast.parse(code)
     normalizer.visit(tree)
     result = ast.unparse(tree)
 
-    assert "_ouverture_v_1" in result
-    assert "_ouverture_v_2" in result
+    assert "_mobius_v_1" in result
+    assert "_mobius_v_2" in result
 
 
 def test_ast_normalizer_visit_name_without_mapping():
     """Test that unmapped names remain unchanged"""
-    mapping = {"x": "_ouverture_v_1"}
-    normalizer = ouverture.ASTNormalizer(mapping)
+    mapping = {"x": "_mobius_v_1"}
+    normalizer = mobius.ASTNormalizer(mapping)
 
     code = "z = x + y"
     tree = ast.parse(code)
     normalizer.visit(tree)
     result = ast.unparse(tree)
 
-    assert "_ouverture_v_1" in result
+    assert "_mobius_v_1" in result
     assert "y" in result  # y should remain unchanged
 
 
 def test_ast_normalizer_visit_arg_with_mapping():
     """Test that function arguments are renamed"""
-    mapping = {"x": "_ouverture_v_1", "y": "_ouverture_v_2"}
-    normalizer = ouverture.ASTNormalizer(mapping)
+    mapping = {"x": "_mobius_v_1", "y": "_mobius_v_2"}
+    normalizer = mobius.ASTNormalizer(mapping)
 
     code = "def foo(x, y): return x + y"
     tree = ast.parse(code)
     normalizer.visit(tree)
     result = ast.unparse(tree)
 
-    assert "_ouverture_v_1" in result
-    assert "_ouverture_v_2" in result
+    assert "_mobius_v_1" in result
+    assert "_mobius_v_2" in result
 
 
 def test_ast_normalizer_visit_functiondef_with_mapping():
     """Test that function names are renamed"""
-    mapping = {"foo": "_ouverture_v_0"}
-    normalizer = ouverture.ASTNormalizer(mapping)
+    mapping = {"foo": "_mobius_v_0"}
+    normalizer = mobius.ASTNormalizer(mapping)
 
     code = "def foo(): pass"
     tree = ast.parse(code)
     normalizer.visit(tree)
     result = ast.unparse(tree)
 
-    assert "_ouverture_v_0" in result
+    assert "_mobius_v_0" in result
     assert "foo" not in result
 
 
@@ -92,7 +92,7 @@ def test_collect_names_simple_names():
     """Test collecting variable names"""
     code = "x = 1\ny = 2\nz = x + y"
     tree = ast.parse(code)
-    names = ouverture.names_collect(tree)
+    names = mobius.names_collect(tree)
 
     assert "x" in names
     assert "y" in names
@@ -103,7 +103,7 @@ def test_collect_names_function_names():
     """Test collecting function names and arguments"""
     code = "def foo(a, b): return a + b"
     tree = ast.parse(code)
-    names = ouverture.names_collect(tree)
+    names = mobius.names_collect(tree)
 
     assert "foo" in names
     assert "a" in names
@@ -113,7 +113,7 @@ def test_collect_names_function_names():
 def test_collect_names_empty_tree():
     """Test collecting names from empty module"""
     tree = ast.parse("")
-    names = ouverture.names_collect(tree)
+    names = mobius.names_collect(tree)
 
     assert len(names) == 0
 
@@ -126,7 +126,7 @@ def test_get_imported_names_import_statement():
     """Test extracting names from import statement"""
     code = "import math"
     tree = ast.parse(code)
-    names = ouverture.imports_get_names(tree)
+    names = mobius.imports_get_names(tree)
 
     assert "math" in names
 
@@ -135,7 +135,7 @@ def test_get_imported_names_import_with_alias():
     """Test extracting aliased import names"""
     code = "import numpy as np"
     tree = ast.parse(code)
-    names = ouverture.imports_get_names(tree)
+    names = mobius.imports_get_names(tree)
 
     assert "np" in names
     assert "numpy" not in names
@@ -145,7 +145,7 @@ def test_get_imported_names_from_import():
     """Test extracting names from from-import"""
     code = "from collections import Counter"
     tree = ast.parse(code)
-    names = ouverture.imports_get_names(tree)
+    names = mobius.imports_get_names(tree)
 
     assert "Counter" in names
 
@@ -154,7 +154,7 @@ def test_get_imported_names_from_import_with_alias():
     """Test extracting aliased from-import names"""
     code = "from collections import Counter as C"
     tree = ast.parse(code)
-    names = ouverture.imports_get_names(tree)
+    names = mobius.imports_get_names(tree)
 
     assert "C" in names
     assert "Counter" not in names
@@ -168,7 +168,7 @@ from collections import Counter
 import numpy as np
 """
     tree = ast.parse(code)
-    names = ouverture.imports_get_names(tree)
+    names = mobius.imports_get_names(tree)
 
     assert "math" in names
     assert "Counter" in names
@@ -187,10 +187,10 @@ def foo():
     return math.sqrt(4)
 """
     tree = ast.parse(code)
-    imported = ouverture.imports_get_names(tree)
-    all_names = ouverture.names_collect(tree)
+    imported = mobius.imports_get_names(tree)
+    all_names = mobius.names_collect(tree)
 
-    result = ouverture.imports_check_unused(tree, imported, all_names)
+    result = mobius.imports_check_unused(tree, imported, all_names)
     assert result is True
 
 
@@ -202,10 +202,10 @@ def foo():
     return 4
 """
     tree = ast.parse(code)
-    imported = ouverture.imports_get_names(tree)
-    all_names = ouverture.names_collect(tree)
+    imported = mobius.imports_get_names(tree)
+    all_names = mobius.names_collect(tree)
 
-    result = ouverture.imports_check_unused(tree, imported, all_names)
+    result = mobius.imports_check_unused(tree, imported, all_names)
     assert result is False
 
 
@@ -221,7 +221,7 @@ import ast
 import os
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.imports_sort(tree)
+    sorted_tree = mobius.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # ast should come before os, os before sys
@@ -237,7 +237,7 @@ from collections import Counter
 from ast import parse
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.imports_sort(tree)
+    sorted_tree = mobius.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # Should be sorted by module name
@@ -254,7 +254,7 @@ def foo():
 import os
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.imports_sort(tree)
+    sorted_tree = mobius.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # All imports should come before the function
@@ -273,7 +273,7 @@ def foo():
     return 42
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
     assert func_def is not None
     assert func_def.name == "foo"
@@ -290,7 +290,7 @@ def process():
     return 42
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
     assert func_def is not None
     assert func_def.name == "process"
@@ -303,7 +303,7 @@ def test_extract_function_def_no_function_raises_error():
     tree = ast.parse(code)
 
     with pytest.raises(ValueError, match="No function definition found"):
-        ouverture.function_extract_definition(tree)
+        mobius.function_extract_definition(tree)
 
 
 def test_extract_function_def_multiple_functions_raises_error():
@@ -318,7 +318,7 @@ def bar():
     tree = ast.parse(code)
 
     with pytest.raises(ValueError, match="Only one function definition is allowed"):
-        ouverture.function_extract_definition(tree)
+        mobius.function_extract_definition(tree)
 
 
 # ============================================================================
@@ -326,15 +326,15 @@ def bar():
 # ============================================================================
 
 def test_create_name_mapping_function_name_always_v0():
-    """Test that function name always maps to _ouverture_v_0"""
+    """Test that function name always maps to _mobius_v_0"""
     code = "def my_function(x): return x"
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
-    forward, reverse = ouverture.mapping_create_name(func_def, imports)
+    forward, reverse = mobius.mapping_create_name(func_def, imports)
 
-    assert forward["my_function"] == "_ouverture_v_0"
-    assert reverse["_ouverture_v_0"] == "my_function"
+    assert forward["my_function"] == "_mobius_v_0"
+    assert reverse["_mobius_v_0"] == "my_function"
 
 
 def test_create_name_mapping_sequential_numbering():
@@ -345,14 +345,14 @@ def foo(a, b):
     return c
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
-    forward, reverse = ouverture.mapping_create_name(func_def, imports)
+    forward, reverse = mobius.mapping_create_name(func_def, imports)
 
     # foo should be v_0
-    assert forward["foo"] == "_ouverture_v_0"
+    assert forward["foo"] == "_mobius_v_0"
     # Other names should be numbered sequentially
-    assert all(name.startswith("_ouverture_v_") for name in forward.values())
+    assert all(name.startswith("_mobius_v_") for name in forward.values())
 
 
 def test_create_name_mapping_builtins_not_renamed():
@@ -362,9 +362,9 @@ def foo(items):
     return len(items)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
-    forward, reverse = ouverture.mapping_create_name(func_def, imports)
+    forward, reverse = mobius.mapping_create_name(func_def, imports)
 
     # len is a built-in and should not be in the mapping
     assert "len" not in forward
@@ -380,27 +380,27 @@ def foo(x):
     return math.sqrt(x)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
-    forward, reverse = ouverture.mapping_create_name(func_def, imports)
+    forward, reverse = mobius.mapping_create_name(func_def, imports)
 
     # math is imported and should not be renamed
     assert "math" not in forward
     assert "x" in forward
 
 
-def test_create_name_mapping_ouverture_aliases_not_renamed():
-    """Test that ouverture aliases are excluded from renaming"""
+def test_create_name_mapping_mobius_aliases_not_renamed():
+    """Test that mobius aliases are excluded from renaming"""
     code = """
 def foo(x):
     return helper(x)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.function_extract_definition(tree)
+    func_def, imports = mobius.function_extract_definition(tree)
 
-    # Simulate that 'helper' is an ouverture alias
-    ouverture_aliases = {"helper"}
-    forward, reverse = ouverture.mapping_create_name(func_def, imports, ouverture_aliases)
+    # Simulate that 'helper' is an mobius alias
+    mobius_aliases = {"helper"}
+    forward, reverse = mobius.mapping_create_name(func_def, imports, mobius_aliases)
 
     # helper should not be renamed
     assert "helper" not in forward
@@ -408,46 +408,46 @@ def foo(x):
 
 
 # ============================================================================
-# Tests for imports_rewrite_ouverture function
+# Tests for imports_rewrite_mobius function
 # ============================================================================
 
-def test_rewrite_ouverture_imports_with_alias():
-    """Test rewriting ouverture import with alias"""
-    code = "from ouverture.pool import abc123 as helper"
+def test_rewrite_mobius_imports_with_alias():
+    """Test rewriting mobius import with alias"""
+    code = "from mobius.pool import abc123 as helper"
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
+    new_imports, alias_mapping = mobius.imports_rewrite_mobius(imports)
 
-    # Should remove alias but keep ouverture.pool module name
+    # Should remove alias but keep mobius.pool module name
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from ouverture.pool import abc123" in result
+    assert "from mobius.pool import abc123" in result
     assert "as helper" not in result
 
     # Should track the alias
     assert alias_mapping["abc123"] == "helper"
 
 
-def test_rewrite_ouverture_imports_without_alias():
-    """Test rewriting ouverture import without alias"""
-    code = "from ouverture.pool import abc123"
+def test_rewrite_mobius_imports_without_alias():
+    """Test rewriting mobius import without alias"""
+    code = "from mobius.pool import abc123"
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
+    new_imports, alias_mapping = mobius.imports_rewrite_mobius(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from ouverture.pool import abc123" in result
+    assert "from mobius.pool import abc123" in result
     assert len(alias_mapping) == 0
 
 
-def test_rewrite_ouverture_imports_non_ouverture_imports_unchanged():
-    """Test that non-ouverture imports remain unchanged"""
+def test_rewrite_mobius_imports_non_mobius_imports_unchanged():
+    """Test that non-mobius imports remain unchanged"""
     code = "import math\nfrom collections import Counter"
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
+    new_imports, alias_mapping = mobius.imports_rewrite_mobius(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
     assert "import math" in result
@@ -456,11 +456,11 @@ def test_rewrite_ouverture_imports_non_ouverture_imports_unchanged():
 
 
 # ============================================================================
-# Tests for calls_replace_ouverture function
+# Tests for calls_replace_mobius function
 # ============================================================================
 
-def test_replace_ouverture_calls_aliased_call():
-    """Test replacing aliased ouverture function calls"""
+def test_replace_mobius_calls_aliased_call():
+    """Test replacing aliased mobius function calls"""
     code = """
 def foo(x):
     return helper(x)
@@ -469,15 +469,15 @@ def foo(x):
     alias_mapping = {"abc123": "helper"}
     name_mapping = {}
 
-    new_tree = ouverture.calls_replace_ouverture(tree, alias_mapping, name_mapping)
+    new_tree = mobius.calls_replace_mobius(tree, alias_mapping, name_mapping)
     result = ast.unparse(new_tree)
 
-    # helper(x) should become abc123._ouverture_v_0(x)
-    assert "abc123._ouverture_v_0" in result
+    # helper(x) should become abc123._mobius_v_0(x)
+    assert "abc123._mobius_v_0" in result
     assert "helper" not in result
 
 
-def test_replace_ouverture_calls_non_aliased_names_unchanged():
+def test_replace_mobius_calls_non_aliased_names_unchanged():
     """Test that non-aliased names remain unchanged"""
     code = """
 def foo(x):
@@ -487,7 +487,7 @@ def foo(x):
     alias_mapping = {"abc123": "helper"}
     name_mapping = {}
 
-    new_tree = ouverture.calls_replace_ouverture(tree, alias_mapping, name_mapping)
+    new_tree = mobius.calls_replace_mobius(tree, alias_mapping, name_mapping)
     result = ast.unparse(new_tree)
 
     # other should remain unchanged
@@ -509,7 +509,7 @@ def test_clear_locations_all_location_info():
             assert node.lineno is not None
             break
 
-    ouverture.ast_clear_locations(tree)
+    mobius.ast_clear_locations(tree)
 
     # Verify all locations are None
     for node in ast.walk(tree):
@@ -531,9 +531,9 @@ def foo():
     return 42
 '''
     tree = ast.parse(code)
-    func_def, _ = ouverture.function_extract_definition(tree)
+    func_def, _ = mobius.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.docstring_extract(func_def)
+    docstring, func_without_doc = mobius.docstring_extract(func_def)
 
     assert docstring == "This is a docstring"
     assert len(func_without_doc.body) == 1  # Only return statement
@@ -547,9 +547,9 @@ def foo():
     return 42
 """
     tree = ast.parse(code)
-    func_def, _ = ouverture.function_extract_definition(tree)
+    func_def, _ = mobius.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.docstring_extract(func_def)
+    docstring, func_without_doc = mobius.docstring_extract(func_def)
 
     assert docstring == ""
     assert len(func_without_doc.body) == 1
@@ -566,9 +566,9 @@ def foo():
     return 42
 '''
     tree = ast.parse(code)
-    func_def, _ = ouverture.function_extract_definition(tree)
+    func_def, _ = mobius.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.docstring_extract(func_def)
+    docstring, func_without_doc = mobius.docstring_extract(func_def)
 
     assert "multiline" in docstring
     assert "docstring" in docstring
@@ -589,11 +589,11 @@ def calculate_sum(first, second):
     tree = ast.parse(code)
 
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
-        ouverture.ast_normalize(tree, "eng")
+        mobius.ast_normalize(tree, "eng")
 
-    assert "_ouverture_v_0" in code_with_doc  # Function name normalized
+    assert "_mobius_v_0" in code_with_doc  # Function name normalized
     assert docstring == "Add two numbers"
-    assert "_ouverture_v_0" in name_mapping.keys()
+    assert "_mobius_v_0" in name_mapping.keys()
     assert code_without_doc != code_with_doc  # Should differ by docstring
 
 
@@ -609,17 +609,17 @@ def foo():
 """
     tree = ast.parse(code)
 
-    code_with_doc, _, _, _, _ = ouverture.ast_normalize(tree, "eng")
+    code_with_doc, _, _, _, _ = mobius.ast_normalize(tree, "eng")
 
     # Verify imports are sorted
     assert code_with_doc.index("import ast") < code_with_doc.index("import os")
     assert code_with_doc.index("import os") < code_with_doc.index("import sys")
 
 
-def test_normalize_ast_with_ouverture_import():
-    """Test normalizing function with ouverture import"""
+def test_normalize_ast_with_mobius_import():
+    """Test normalizing function with mobius import"""
     code = """
-from ouverture.pool import abc123 as helper
+from mobius.pool import abc123 as helper
 
 def foo(x):
     \"\"\"Process with helper\"\"\"
@@ -628,17 +628,17 @@ def foo(x):
     tree = ast.parse(code)
 
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
-        ouverture.ast_normalize(tree, "eng")
+        mobius.ast_normalize(tree, "eng")
 
-    # Should remove alias but keep ouverture.pool module name
-    assert "from ouverture.pool import abc123" in code_with_doc
+    # Should remove alias but keep mobius.pool module name
+    assert "from mobius.pool import abc123" in code_with_doc
     assert "as helper" not in code_with_doc
 
     # Should track alias
     assert alias_mapping["abc123"] == "helper"
 
     # Should replace calls
-    assert "abc123._ouverture_v_0" in code_with_doc
+    assert "abc123._mobius_v_0" in code_with_doc
 
 
 # ============================================================================
@@ -649,8 +649,8 @@ def test_compute_hash_deterministic():
     """Test that same input produces same hash"""
     code = "def foo(): return 42"
 
-    hash1 = ouverture.hash_compute(code)
-    hash2 = ouverture.hash_compute(code)
+    hash1 = mobius.hash_compute(code)
+    hash2 = mobius.hash_compute(code)
 
     assert hash1 == hash2
 
@@ -659,7 +659,7 @@ def test_compute_hash_format():
     """Test that hash is 64 hex characters"""
     code = "def foo(): return 42"
 
-    hash_value = ouverture.hash_compute(code)
+    hash_value = mobius.hash_compute(code)
 
     assert len(hash_value) == 64
     assert all(c in '0123456789abcdef' for c in hash_value)
@@ -670,8 +670,8 @@ def test_compute_hash_different_code_different_hash():
     code1 = "def foo(): return 42"
     code2 = "def bar(): return 43"
 
-    hash1 = ouverture.hash_compute(code1)
-    hash2 = ouverture.hash_compute(code2)
+    hash1 = mobius.hash_compute(code1)
+    hash2 = mobius.hash_compute(code2)
 
     assert hash1 != hash2
 
@@ -681,8 +681,8 @@ def test_hash_compute_with_algorithm_parameter():
     code = "def foo(): pass"
 
     # Default should be sha256
-    hash_default = ouverture.hash_compute(code)
-    hash_sha256 = ouverture.hash_compute(code, algorithm='sha256')
+    hash_default = mobius.hash_compute(code)
+    hash_sha256 = mobius.hash_compute(code, algorithm='sha256')
 
     assert hash_default == hash_sha256
     assert len(hash_default) == 64
@@ -692,8 +692,8 @@ def test_hash_compute_algorithm_deterministic():
     """Test that hash_compute with algorithm produces deterministic results"""
     code = "def foo(): pass"
 
-    hash1 = ouverture.hash_compute(code, algorithm='sha256')
-    hash2 = ouverture.hash_compute(code, algorithm='sha256')
+    hash1 = mobius.hash_compute(code, algorithm='sha256')
+    hash2 = mobius.hash_compute(code, algorithm='sha256')
 
     assert hash1 == hash2
 
@@ -711,7 +711,7 @@ def foo():
 '''
     new_doc = "New docstring"
 
-    result = ouverture.docstring_replace(code, new_doc)
+    result = mobius.docstring_replace(code, new_doc)
 
     assert "New docstring" in result
     assert "Old docstring" not in result
@@ -725,7 +725,7 @@ def foo():
 """
     new_doc = "Added docstring"
 
-    result = ouverture.docstring_replace(code, new_doc)
+    result = mobius.docstring_replace(code, new_doc)
 
     assert "Added docstring" in result
 
@@ -737,7 +737,7 @@ def foo():
     """Remove this"""
     return 42
 '''
-    result = ouverture.docstring_replace(code, "")
+    result = mobius.docstring_replace(code, "")
 
     assert "Remove this" not in result
     tree = ast.parse(result)
@@ -755,51 +755,51 @@ def foo():
 def test_denormalize_code_variable_names():
     """Test denormalizing variable names"""
     normalized = """
-def _ouverture_v_0(_ouverture_v_1, _ouverture_v_2):
-    _ouverture_v_3 = _ouverture_v_1 + _ouverture_v_2
-    return _ouverture_v_3
+def _mobius_v_0(_mobius_v_1, _mobius_v_2):
+    _mobius_v_3 = _mobius_v_1 + _mobius_v_2
+    return _mobius_v_3
 """
     name_mapping = {
-        "_ouverture_v_0": "calculate",
-        "_ouverture_v_1": "first",
-        "_ouverture_v_2": "second",
-        "_ouverture_v_3": "result"
+        "_mobius_v_0": "calculate",
+        "_mobius_v_1": "first",
+        "_mobius_v_2": "second",
+        "_mobius_v_3": "result"
     }
     alias_mapping = {}
 
-    result = ouverture.code_denormalize(normalized, name_mapping, alias_mapping)
+    result = mobius.code_denormalize(normalized, name_mapping, alias_mapping)
 
     assert "calculate" in result
     assert "first" in result
     assert "second" in result
     assert "result" in result
-    assert "_ouverture_v_" not in result
+    assert "_mobius_v_" not in result
 
 
-def test_denormalize_code_ouverture_imports():
-    """Test denormalizing ouverture imports"""
+def test_denormalize_code_mobius_imports():
+    """Test denormalizing mobius imports"""
     normalized = """
-from ouverture.pool import abc123
+from mobius.pool import abc123
 
-def _ouverture_v_0(_ouverture_v_1):
-    return abc123._ouverture_v_0(_ouverture_v_1)
+def _mobius_v_0(_mobius_v_1):
+    return abc123._mobius_v_0(_mobius_v_1)
 """
     name_mapping = {
-        "_ouverture_v_0": "process",
-        "_ouverture_v_1": "data"
+        "_mobius_v_0": "process",
+        "_mobius_v_1": "data"
     }
     alias_mapping = {
         "abc123": "helper"
     }
 
-    result = ouverture.code_denormalize(normalized, name_mapping, alias_mapping)
+    result = mobius.code_denormalize(normalized, name_mapping, alias_mapping)
 
     # Should restore import with alias
-    assert "from ouverture.pool import abc123 as helper" in result
+    assert "from mobius.pool import abc123 as helper" in result
 
     # Should restore function calls
     assert "helper(data)" in result
-    assert "abc123._ouverture_v_0" not in result
+    assert "abc123._mobius_v_0" not in result
 
 
 # ============================================================================
@@ -809,13 +809,13 @@ def _ouverture_v_0(_ouverture_v_1):
 def test_mapping_compute_hash_deterministic():
     """Test that mapping_compute_hash produces deterministic hashes"""
     docstring = "Calculate the average"
-    name_mapping = {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"}
+    name_mapping = {"_mobius_v_0": "calculate_average", "_mobius_v_1": "numbers"}
     alias_mapping = {"abc123": "helper"}
     comment = "Formal terminology"
 
     # Compute hash twice - should be identical
-    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
-    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+    hash1 = mobius.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+    hash2 = mobius.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
 
     assert hash1 == hash2
     assert len(hash1) == 64  # SHA256 produces 64 hex characters
@@ -825,11 +825,11 @@ def test_mapping_compute_hash_deterministic():
 def test_mapping_compute_hash_different_comments():
     """Test that different comments produce different hashes"""
     docstring = "Calculate the average"
-    name_mapping = {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"}
+    name_mapping = {"_mobius_v_0": "calculate_average", "_mobius_v_1": "numbers"}
     alias_mapping = {"abc123": "helper"}
 
-    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Formal")
-    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Informal")
+    hash1 = mobius.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Formal")
+    hash2 = mobius.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Informal")
 
     assert hash1 != hash2
 
@@ -837,10 +837,10 @@ def test_mapping_compute_hash_different_comments():
 def test_mapping_compute_hash_empty_comment():
     """Test that mapping hash works with empty comment"""
     docstring = "Calculate the average"
-    name_mapping = {"_ouverture_v_0": "calculate_average"}
+    name_mapping = {"_mobius_v_0": "calculate_average"}
     alias_mapping = {}
 
-    hash_val = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "")
+    hash_val = mobius.mapping_compute_hash(docstring, name_mapping, alias_mapping, "")
 
     assert len(hash_val) == 64
     assert all(c in '0123456789abcdef' for c in hash_val)
@@ -850,46 +850,19 @@ def test_mapping_compute_hash_canonical_json():
     """Test that mapping hash is based on canonical JSON (order-independent)"""
     docstring = "Test"
     # Different key orders should produce same hash
-    name_mapping1 = {"_ouverture_v_0": "foo", "_ouverture_v_1": "bar"}
-    name_mapping2 = {"_ouverture_v_1": "bar", "_ouverture_v_0": "foo"}
+    name_mapping1 = {"_mobius_v_0": "foo", "_mobius_v_1": "bar"}
+    name_mapping2 = {"_mobius_v_1": "bar", "_mobius_v_0": "foo"}
     alias_mapping = {}
 
-    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping1, alias_mapping, "")
-    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping2, alias_mapping, "")
+    hash1 = mobius.mapping_compute_hash(docstring, name_mapping1, alias_mapping, "")
+    hash2 = mobius.mapping_compute_hash(docstring, name_mapping2, alias_mapping, "")
 
     assert hash1 == hash2
 
 
-def test_schema_detect_version_v0(mock_ouverture_dir):
-    """Test that schema_detect_version correctly identifies v0 format"""
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
-    objects_dir = pool_dir
-    test_hash = "abcd1234" + "0" * 56
-
-    # Create v0 format: XX/YYYYYY.json
-    hash_dir = objects_dir / test_hash[:2]
-    hash_dir.mkdir(parents=True, exist_ok=True)
-    json_path = hash_dir / f'{test_hash[2:]}.json'
-
-    v0_data = {
-        'version': 0,
-        'hash': test_hash,
-        'normalized_code': 'def _ouverture_v_0(): pass',
-        'docstrings': {},
-        'name_mappings': {},
-        'alias_mappings': {}
-    }
-
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(v0_data, f)
-
-    version = ouverture.schema_detect_version(test_hash)
-    assert version == 0
-
-
-def test_schema_detect_version_v1(mock_ouverture_dir):
+def test_schema_detect_version_v1(mock_mobius_dir):
     """Test that schema_detect_version correctly identifies v1 format"""
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
+    pool_dir = mock_mobius_dir / '.mobius' / 'pool'
     objects_dir = pool_dir
     test_hash = "abcd1234" + "0" * 56
 
@@ -902,7 +875,7 @@ def test_schema_detect_version_v1(mock_ouverture_dir):
         'schema_version': 1,
         'hash': test_hash,
         'hash_algorithm': 'sha256',
-        'normalized_code': 'def _ouverture_v_0(): pass',
+        'normalized_code': 'def _mobius_v_0(): pass',
         'encoding': 'none',
         'metadata': {}
     }
@@ -910,21 +883,21 @@ def test_schema_detect_version_v1(mock_ouverture_dir):
     with open(object_json, 'w', encoding='utf-8') as f:
         json.dump(v1_data, f)
 
-    version = ouverture.schema_detect_version(test_hash)
+    version = mobius.schema_detect_version(test_hash)
     assert version == 1
 
 
-def test_schema_detect_version_not_found(mock_ouverture_dir):
+def test_schema_detect_version_not_found(mock_mobius_dir):
     """Test that schema_detect_version returns None for non-existent function"""
     test_hash = "nonexistent" + "0" * 54
 
-    version = ouverture.schema_detect_version(test_hash)
+    version = mobius.schema_detect_version(test_hash)
     assert version is None
 
 
 def test_metadata_create_basic():
     """Test that metadata_create generates proper metadata structure"""
-    metadata = ouverture.metadata_create()
+    metadata = mobius.metadata_create()
 
     assert 'created' in metadata
     assert 'author' in metadata
@@ -940,13 +913,13 @@ def test_metadata_create_basic():
 def test_metadata_create_with_author():
     """Test that metadata_create uses author from environment"""
     with patch.dict(os.environ, {'USER': 'testuser'}):
-        metadata = ouverture.metadata_create()
+        metadata = mobius.metadata_create()
         assert metadata['author'] == 'testuser'
 
 
 def test_metadata_create_timestamp_format():
     """Test that metadata_create uses ISO 8601 timestamp format"""
-    metadata = ouverture.metadata_create()
+    metadata = mobius.metadata_create()
     created = metadata['created']
 
     # Should be ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ

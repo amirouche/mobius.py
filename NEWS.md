@@ -1,4 +1,4 @@
-# Ouverture News & Changelog
+# Mobius News & Changelog
 
 ## Unreleased Changes
 
@@ -15,9 +15,9 @@
 
 **New commands:**
 ```bash
-ouverture.py show HASH@LANG              # Explore available mappings
-ouverture.py migrate                     # Migrate v0 to v1 format
-ouverture.py validate [HASH]             # Validate schema integrity
+mobius.py show HASH@LANG              # Explore available mappings
+mobius.py migrate                     # Migrate v0 to v1 format
+mobius.py validate [HASH]             # Validate schema integrity
 ```
 
 **Backward compatibility:**
@@ -31,45 +31,45 @@ ouverture.py validate [HASH]             # Validate schema integrity
 
 ### Breaking Changes
 
-#### OUVERTURE_DIRECTORY: New Default Location for Function Pool
+#### MOBIUS_DIRECTORY: New Default Location for Function Pool
 
 **What changed:**
-- The default location for the ouverture function pool has moved from `.ouverture/` (in the current working directory) to `$HOME/.local/ouverture/`
+- The default location for the mobius function pool has moved from `.mobius/` (in the current working directory) to `$HOME/.local/mobius/`
 - This follows XDG Base Directory conventions for storing user-specific data
 
 **Migration:**
-- **Environment Variable:** You can now set `OUVERTURE_DIRECTORY` to customize where the function pool is stored
-- **Default behavior:** If `OUVERTURE_DIRECTORY` is not set, ouverture will use `$HOME/.local/ouverture/` as the default location
-- **Old behavior:** To maintain the old behavior of using `.ouverture/` in the current directory, set:
+- **Environment Variable:** You can now set `MOBIUS_DIRECTORY` to customize where the function pool is stored
+- **Default behavior:** If `MOBIUS_DIRECTORY` is not set, mobius will use `$HOME/.local/mobius/` as the default location
+- **Old behavior:** To maintain the old behavior of using `.mobius/` in the current directory, set:
   ```bash
-  export OUVERTURE_DIRECTORY=.ouverture
+  export MOBIUS_DIRECTORY=.mobius
   ```
 
 **Why this change:**
-- **System-wide pool:** Having a single location in `$HOME/.local/ouverture/` allows you to build one shared function pool across all your projects
+- **System-wide pool:** Having a single location in `$HOME/.local/mobius/` allows you to build one shared function pool across all your projects
 - **Standards compliance:** Follows the XDG Base Directory specification for user data
-- **Cleaner project directories:** No more `.ouverture/` directories cluttering your project folders
+- **Cleaner project directories:** No more `.mobius/` directories cluttering your project folders
 - **Better collaboration:** Makes it clearer when functions are being stored in a global pool vs. project-specific pool
 
 **Example usage:**
 ```bash
-# Use default location ($HOME/.local/ouverture/)
-python3 ouverture.py add examples/example_simple.py@eng
+# Use default location ($HOME/.local/mobius/)
+python3 mobius.py add examples/example_simple.py@eng
 
 # Use custom location
-export OUVERTURE_DIRECTORY=/path/to/my/pool
-python3 ouverture.py add examples/example_simple.py@eng
+export MOBIUS_DIRECTORY=/path/to/my/pool
+python3 mobius.py add examples/example_simple.py@eng
 
 # Use current directory (old behavior)
-export OUVERTURE_DIRECTORY=.ouverture
-python3 ouverture.py add examples/example_simple.py@eng
+export MOBIUS_DIRECTORY=.mobius
+python3 mobius.py add examples/example_simple.py@eng
 ```
 
 **Impact:**
-- Existing `.ouverture/` directories in your projects will no longer be used by default
+- Existing `.mobius/` directories in your projects will no longer be used by default
 - To migrate existing functions, you can either:
-  1. Copy your old `.ouverture/` directory to `$HOME/.local/ouverture/`
-  2. Set `OUVERTURE_DIRECTORY=.ouverture` to continue using the old location
+  1. Copy your old `.mobius/` directory to `$HOME/.local/mobius/`
+  2. Set `MOBIUS_DIRECTORY=.mobius` to continue using the old location
   3. Re-add your functions to the new default location
 
 ---

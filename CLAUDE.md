@@ -1,8 +1,8 @@
-# CLAUDE.md - AI Assistant Guide for Ouverture
+# CLAUDE.md - AI Assistant Guide for Mobius
 
 ## Project Overview
 
-**Ouverture** is a function pool manager for Python that enables multilingual function sharing through AST normalization and content-addressed storage. It allows the same logical function written in different human languages (with different variable names, docstrings, etc.) to share the same hash and be stored together.
+**Mobius** is a function pool manager for Python that enables multilingual function sharing through AST normalization and content-addressed storage. It allows the same logical function written in different human languages (with different variable names, docstrings, etc.) to share the same hash and be stored together.
 
 ### Core Concept
 
@@ -18,36 +18,36 @@ Functions with identical logic but different naming (e.g., English vs French var
 1. **AST-based normalization**: Source code is parsed into an AST, normalized, then unparsed
 2. **Hash on logic, not names**: Docstrings excluded from hash computation to enable multilingual support
 3. **Bidirectional mapping**: Original names preserved for reconstruction in target language
-4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/ouverture/objects/XX/YYYYYY.json` (configurable via `OUVERTURE_DIRECTORY` environment variable)
-5. **Single-file architecture**: All code resides in `ouverture.py` - no modularization into separate packages. This keeps the tool simple, self-contained, and easy to distribute as a single script.
+4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/mobius/objects/XX/YYYYYY.json` (configurable via `MOBIUS_DIRECTORY` environment variable)
+5. **Single-file architecture**: All code resides in `mobius.py` - no modularization into separate packages. This keeps the tool simple, self-contained, and easy to distribute as a single script.
 6. **Native language debugging**: Tracebacks and debugger interactions show variable names in the original human language, not normalized forms
-7. **Object prefix for valid identifiers**: Ouverture imports use `object_` prefix (e.g., `from ouverture.pool import object_abc123 as func`) to ensure valid Python identifiers since SHA256 hashes can start with digits (0-9)
+7. **Object prefix for valid identifiers**: Mobius imports use `object_` prefix (e.g., `from mobius.pool import object_abc123 as func`) to ensure valid Python identifiers since SHA256 hashes can start with digits (0-9)
 
 ### Storage Location Configuration
 
-The ouverture function pool location is controlled by the `OUVERTURE_DIRECTORY` environment variable:
+The mobius function pool location is controlled by the `MOBIUS_DIRECTORY` environment variable:
 
-- **Default**: `$HOME/.local/ouverture/` (follows XDG Base Directory specification)
-- **Custom location**: Set `OUVERTURE_DIRECTORY=/path/to/pool` to override
-- **Legacy behavior**: Set `OUVERTURE_DIRECTORY=.ouverture` to use project-local storage (pre-v1.0 behavior)
+- **Default**: `$HOME/.local/mobius/` (follows XDG Base Directory specification)
+- **Custom location**: Set `MOBIUS_DIRECTORY=/path/to/pool` to override
+- **Legacy behavior**: Set `MOBIUS_DIRECTORY=.mobius` to use project-local storage (pre-v1.0 behavior)
 
 **Examples**:
 ```bash
 # Use default location
-python3 ouverture.py add example.py@eng
+python3 mobius.py add example.py@eng
 
 # Use custom location
-export OUVERTURE_DIRECTORY=/shared/pool
-python3 ouverture.py add example.py@eng
+export MOBIUS_DIRECTORY=/shared/pool
+python3 mobius.py add example.py@eng
 
 # Use project-local directory
-export OUVERTURE_DIRECTORY=.ouverture
-python3 ouverture.py add example.py@eng
+export MOBIUS_DIRECTORY=.mobius
+python3 mobius.py add example.py@eng
 ```
 
-**Migration note**: If you have existing `.ouverture/` directories in your projects, you can either:
-1. Copy them to `$HOME/.local/ouverture/` to consolidate into a global pool
-2. Set `OUVERTURE_DIRECTORY=.ouverture` to continue using project-local storage
+**Migration note**: If you have existing `.mobius/` directories in your projects, you can either:
+1. Copy them to `$HOME/.local/mobius/` to consolidate into a global pool
+2. Set `MOBIUS_DIRECTORY=.mobius` to continue using project-local storage
 3. Re-add your functions to the new default location
 
 ### Data Flow
@@ -59,11 +59,11 @@ Parse to AST
     ↓
 Extract docstring (language-specific)
     ↓
-Normalize AST (rename vars, sort imports, rewrite ouverture imports)
+Normalize AST (rename vars, sort imports, rewrite mobius imports)
     ↓
 Compute hash (on code WITHOUT docstring)
     ↓
-Store in $HOME/.local/ouverture/objects/ (or $OUVERTURE_DIRECTORY/objects/) with:
+Store in $HOME/.local/mobius/objects/ (or $MOBIUS_DIRECTORY/objects/) with:
     - normalized_code (with docstring for display)
     - per-language mappings (name_mappings, alias_mappings, docstrings)
 ```
@@ -72,19 +72,19 @@ Store in $HOME/.local/ouverture/objects/ (or $OUVERTURE_DIRECTORY/objects/) with
 
 ```
 hello-claude/
-├── ouverture.py              # Main CLI tool (600+ lines)
+├── mobius.py              # Main CLI tool (600+ lines)
 ├── examples/                  # Example functions directory
 │   ├── README.md              # Testing documentation
 │   ├── example_simple.py          # English example
 │   ├── example_simple_french.py   # French example (same logic)
 │   ├── example_simple_spanish.py  # Spanish example (same logic)
 │   ├── example_with_import.py     # Example with stdlib imports
-│   └── example_with_ouverture.py  # Example calling other pool functions
+│   └── example_with_mobius.py  # Example calling other pool functions
 ├── README_TESTING.md          # Testing documentation
 └── .gitignore                 # Ignores __pycache__, etc.
 
-# Function pool (default location, configurable via OUVERTURE_DIRECTORY):
-$HOME/.local/ouverture/
+# Function pool (default location, configurable via MOBIUS_DIRECTORY):
+$HOME/.local/mobius/
     └── objects/
         └── XX/                # First 2 chars of hash
             └── YYYYYY.json    # Remaining 62 chars + .json
@@ -108,27 +108,27 @@ $HOME/.local/ouverture/
 - Sorts imports lexicographically
 - Extracts function definition and imports
 - Extracts docstring separately
-- Rewrites `from ouverture.pool import X as Y` → `from ouverture.pool import X` (removes alias)
-- Creates name mappings (`original → _ouverture_v_X`)
+- Rewrites `from mobius.pool import X as Y` → `from mobius.pool import X` (removes alias)
+- Creates name mappings (`original → _mobius_v_X`)
 - Returns: normalized code (with/without docstring), docstring, mappings
 
-#### `mapping_create_name(function_def, imports, ouverture_aliases)` (lines 133-180)
+#### `mapping_create_name(function_def, imports, mobius_aliases)` (lines 133-180)
 **Generates bidirectional name mappings**
-- Function name always gets `_ouverture_v_0`
-- Variables/args get sequential indices: `_ouverture_v_1`, `_ouverture_v_2`, ...
-- **Excluded from renaming**: Python builtins, imported names, ouverture aliases
+- Function name always gets `_mobius_v_0`
+- Variables/args get sequential indices: `_mobius_v_1`, `_mobius_v_2`, ...
+- **Excluded from renaming**: Python builtins, imported names, mobius aliases
 - Returns: `(forward_mapping, reverse_mapping)`
 
-#### `imports_rewrite_ouverture(imports)` (lines 183-213)
-**Transforms ouverture imports for normalization**
-- Rewrites: `from ouverture.pool import HASH as alias` → `from ouverture.pool import HASH` (removes alias)
+#### `imports_rewrite_mobius(imports)` (lines 183-213)
+**Transforms mobius imports for normalization**
+- Rewrites: `from mobius.pool import HASH as alias` → `from mobius.pool import HASH` (removes alias)
 - Tracks alias mappings for later denormalization
-- Necessary because normalized code uses `HASH._ouverture_v_0(...)` instead of `alias(...)`
+- Necessary because normalized code uses `HASH._mobius_v_0(...)` instead of `alias(...)`
 
-#### `calls_replace_ouverture(tree, alias_mapping, name_mapping)` (lines 216-235)
+#### `calls_replace_mobius(tree, alias_mapping, name_mapping)` (lines 216-235)
 **Replaces aliased function calls with normalized form**
-- Transforms: `alias(...)` → `HASH._ouverture_v_0(...)`
-- Uses alias_mapping to determine which names are ouverture functions
+- Transforms: `alias(...)` → `HASH._mobius_v_0(...)`
+- Uses alias_mapping to determine which names are mobius functions
 
 #### `hash_compute(code, algorithm='sha256')` (lines 321-335)
 **Generates hash using specified algorithm**
@@ -162,21 +162,21 @@ $HOME/.local/ouverture/
 
 #### `function_save_v0(hash_value, lang, ...)` (lines 451-493)
 **Stores function in content-addressed pool** (Schema v0 - legacy)
-- Path: `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/ouverture/`, XX = first 2 chars of hash)
+- Path: `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/mobius/`, XX = first 2 chars of hash)
 - Merges with existing data if hash already exists
 - Stores per-language: docstrings, name_mappings, alias_mappings
 - **Note**: Kept for migration tool and backward compatibility. New code should use v1 functions.
 
 #### `function_save_v1(hash_value, normalized_code, metadata)` (lines 495-532)
 **Stores function in v1 format** (Schema v1)
-- Creates function directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../`
+- Creates function directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../`
 - Writes `object.json` with schema_version=1, hash_algorithm, encoding, metadata
 - Does NOT store language-specific data (stored separately in mapping files)
 - Clean separation: code in object.json, language variants in mapping.json files
 
 #### `mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment='')` (lines 534-585)
 **Stores language mapping in v1 format** (Schema v1)
-- Creates mapping directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../`
+- Creates mapping directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../`
 - Writes `mapping.json` with docstring, name_mapping, alias_mapping, comment
 - Content-addressed by mapping hash (enables deduplication)
 - Identical mappings across functions share same file
@@ -192,26 +192,26 @@ $HOME/.local/ouverture/
 #### `function_load_v0(hash_value, lang)` (lines 772-813)
 **Loads function from pool using schema v0** (Legacy)
 - Kept for backward compatibility with v0 format
-- Reads single JSON file: `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json`
+- Reads single JSON file: `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json`
 - Returns: (normalized_code, name_mapping, alias_mapping, docstring)
 - **Note**: Use function_load() which auto-detects v0/v1
 
 #### `function_load_v1(hash_value)` (lines 816-848)
 **Loads function from pool using schema v1**
-- Reads object.json: `$OUVERTURE_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json`
+- Reads object.json: `$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json`
 - Returns: Dictionary with schema_version, hash, hash_algorithm, normalized_code, encoding, metadata
 - Does NOT load language-specific data (use mapping functions for that)
 
 #### `mappings_list_v1(func_hash, lang)` (lines 851-909)
 **Lists all mapping variants for a language** (Schema v1)
-- Scans language directory: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/`
+- Scans language directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/`
 - Returns: List of (mapping_hash, comment) tuples
 - Used to discover available mapping variants
 - Returns empty list if language doesn't exist
 
 #### `mapping_load_v1(func_hash, lang, mapping_hash)` (lines 912-950)
 **Loads specific language mapping** (Schema v1)
-- Reads mapping.json: `$OUVERTURE_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json`
+- Reads mapping.json: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json`
 - Returns: Tuple of (docstring, name_mapping, alias_mapping, comment)
 - Content-addressed storage enables deduplication
 
@@ -233,13 +233,13 @@ $HOME/.local/ouverture/
 - V0 backward compatible: Automatically handles v0 format (single mapping per language)
 - Uses function_load() + code_denormalize() to reconstruct original code
 - **This is the recommended command** for exploring and viewing functions
-- **Note**: CLI command `ouverture.py show HASH@lang[@mapping_hash]`
+- **Note**: CLI command `mobius.py show HASH@lang[@mapping_hash]`
 
 #### `code_denormalize(normalized_code, name_mapping, alias_mapping)` (lines 497-679)
 **Reconstructs original-looking code**
-- Reverses variable renaming: `_ouverture_v_X → original_name`
-- Rewrites imports: `from ouverture.pool import X` → `from ouverture.pool import X as alias` (restores alias)
-- Transforms calls: `HASH._ouverture_v_0(...)` → `alias(...)`
+- Reverses variable renaming: `_mobius_v_X → original_name`
+- Rewrites imports: `from mobius.pool import X` → `from mobius.pool import X as alias` (restores alias)
+- Transforms calls: `HASH._mobius_v_0(...)` → `alias(...)`
 
 #### `schema_migrate_function_v0_to_v1(func_hash, keep_v0=False)` (lines 1054-1118)
 **Migrate single function from v0 to v1** (Schema Migration)
@@ -248,7 +248,7 @@ $HOME/.local/ouverture/
 - Migrates each language mapping to separate mapping.json files
 - Validates migration before completion
 - Optionally deletes v0 file (default: delete)
-- **Note**: CLI command `ouverture.py migrate HASH [--keep-v0]`
+- **Note**: CLI command `mobius.py migrate HASH [--keep-v0]`
 
 #### `schema_migrate_all_v0_to_v1(keep_v0=False, dry_run=False)` (lines 1121-1172)
 **Migrate all v0 functions to v1** (Schema Migration)
@@ -256,7 +256,7 @@ $HOME/.local/ouverture/
 - Migrates each function using schema_migrate_function_v0_to_v1()
 - Supports dry-run mode (shows what would be migrated)
 - Returns list of migrated function hashes
-- **Note**: CLI command `ouverture.py migrate [--keep-v0] [--dry-run]`
+- **Note**: CLI command `mobius.py migrate [--keep-v0] [--dry-run]`
 
 #### `schema_validate_v1(func_hash)` (lines 1175-1239)
 **Validate v1 function structure** (Schema Validation)
@@ -264,26 +264,26 @@ $HOME/.local/ouverture/
 - Verifies at least one language mapping exists
 - Validates schema_version is 1
 - Returns tuple of (is_valid, errors)
-- **Note**: CLI command `ouverture.py validate HASH`
+- **Note**: CLI command `mobius.py validate HASH`
 
 ### Storage Schema
 
 #### Current Schema (v0)
 
-Functions are stored in `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/ouverture/objects/XX/YYYYYY.json`) where XX is the first 2 characters of the hash.
+Functions are stored in `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/mobius/objects/XX/YYYYYY.json`) where XX is the first 2 characters of the hash.
 
 ```json
 {
   "version": 0,
   "hash": "abc123def456...",
-  "normalized_code": "def _ouverture_v_0(...):\n    ...",
+  "normalized_code": "def _mobius_v_0(...):\n    ...",
   "docstrings": {
     "eng": "Calculate the average...",
     "fra": "Calculer la moyenne..."
   },
   "name_mappings": {
-    "eng": {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"},
-    "fra": {"_ouverture_v_0": "calculer_moyenne", "_ouverture_v_1": "nombres"}
+    "eng": {"_mobius_v_0": "calculate_average", "_mobius_v_1": "numbers"},
+    "fra": {"_mobius_v_0": "calculer_moyenne", "_mobius_v_1": "nombres"}
   },
   "alias_mappings": {
     "eng": {"abc123": "helper"},
@@ -304,7 +304,7 @@ See `ROADMAP.md` for the comprehensive development plan.
 
 **Directory Structure:**
 ```
-$OUVERTURE_DIRECTORY/objects/         # Default: $HOME/.local/ouverture/objects/
+$MOBIUS_DIRECTORY/objects/         # Default: $HOME/.local/mobius/objects/
   sha256/                             # Hash algorithm name
     ab/                               # First 2 chars of function hash
       c123def456.../                  # Function directory (remaining hash chars)
@@ -342,7 +342,7 @@ $OUVERTURE_DIRECTORY/objects/         # Default: $HOME/.local/ouverture/objects/
 ```json
 {
   "docstring": "Calculate the average...",
-  "name_mapping": {"_ouverture_v_0": "calculate_average", ...},
+  "name_mapping": {"_mobius_v_0": "calculate_average", ...},
   "alias_mapping": {"abc123": "helper"}
 }
 ```
@@ -362,41 +362,41 @@ Key improvements:
 
 #### Configuration and Identity
 ```bash
-ouverture.py init                          # Initialize ouverture directory (default: $HOME/.local/ouverture/) and config
-ouverture.py whoami username [USERNAME]    # Get/set username
-ouverture.py whoami email [EMAIL]          # Get/set email
-ouverture.py whoami public-key [URL]       # Get/set public key URL
-ouverture.py whoami language [LANG...]     # Get/set preferred languages
+mobius.py init                          # Initialize mobius directory (default: $HOME/.local/mobius/) and config
+mobius.py whoami username [USERNAME]    # Get/set username
+mobius.py whoami email [EMAIL]          # Get/set email
+mobius.py whoami public-key [URL]       # Get/set public key URL
+mobius.py whoami language [LANG...]     # Get/set preferred languages
 ```
 
 #### Remote Repository Management
 ```bash
-ouverture.py remote add NAME URL                    # Add HTTP/HTTPS remote
-ouverture.py remote add NAME file:///path/to/db     # Add SQLite file remote
-ouverture.py remote remove NAME                     # Remove remote
-ouverture.py remote pull NAME                       # Fetch functions from remote
-ouverture.py remote push NAME                       # Publish functions to remote
+mobius.py remote add NAME URL                    # Add HTTP/HTTPS remote
+mobius.py remote add NAME file:///path/to/db     # Add SQLite file remote
+mobius.py remote remove NAME                     # Remove remote
+mobius.py remote pull NAME                       # Fetch functions from remote
+mobius.py remote push NAME                       # Publish functions to remote
 ```
 
 #### Function Operations
 ```bash
-ouverture.py add FILENAME.py@LANG                      # Add function to local pool
-ouverture.py show HASH@LANG[@MAPPING_HASH]             # Show function with mapping exploration (recommended)
-ouverture.py get HASH[@LANG] FILENAME.py               # Retrieve function and save to file (in specific language)
-ouverture.py translate HASH@LANG LANG                  # Add translation for existing function
-ouverture.py review HASH                               # Recursively review function and dependencies (in user's languages)
-ouverture.py run HASH@lang                             # Execute function interactively
-ouverture.py run HASH@lang --debug                     # Execute with debugger (native language variables)
+mobius.py add FILENAME.py@LANG                      # Add function to local pool
+mobius.py show HASH@LANG[@MAPPING_HASH]             # Show function with mapping exploration (recommended)
+mobius.py get HASH[@LANG] FILENAME.py               # Retrieve function and save to file (in specific language)
+mobius.py translate HASH@LANG LANG                  # Add translation for existing function
+mobius.py review HASH                               # Recursively review function and dependencies (in user's languages)
+mobius.py run HASH@lang                             # Execute function interactively
+mobius.py run HASH@lang --debug                     # Execute with debugger (native language variables)
 ```
 
 #### Discovery
 ```bash
-ouverture.py log [NAME | URL]                  # Show git-like commit log of pool/remote
-ouverture.py search [NAME | URL] [QUERY...]    # Search and list functions by query
+mobius.py log [NAME | URL]                  # Show git-like commit log of pool/remote
+mobius.py search [NAME | URL] [QUERY...]    # Search and list functions by query
 ```
 
 **Currently implemented**:
-- `init` command: Initialize ouverture directory and config file
+- `init` command: Initialize mobius directory and config file
 - `whoami` command: Get/set user configuration (username, email, public-key, language)
 - `add` command: Parses file, normalizes AST, computes hash, saves to local pool
 - `show` command: Shows function with mapping exploration and selection (v0 and v1 compatible)
@@ -431,23 +431,23 @@ def calculer_moyenne(nombres):
 
 # If executed and error occurs, traceback shows:
 # NameError: name 'nombres' is not defined
-# NOT: NameError: name '_ouverture_v_1' is not defined
+# NOT: NameError: name '_mobius_v_1' is not defined
 ```
 
 **Implementation approach**:
 - Intercept exceptions during execution
-- Map `_ouverture_v_X` back to original names using stored mappings
+- Map `_mobius_v_X` back to original names using stored mappings
 - Rewrite traceback with native language variable names
 - Preserve line numbers from original source
 - Show both normalized and native versions for debugging
 
 ### Interactive Debugger Integration
 
-When using `ouverture.py run HASH@lang --debug`:
+When using `mobius.py run HASH@lang --debug`:
 - Variables displayed with native language names
 - Can set breakpoints using original function/variable names
 - Step through code with native language context
-- Inspect values using familiar names (e.g., `print(nombres)` not `print(_ouverture_v_1)`)
+- Inspect values using familiar names (e.g., `print(nombres)` not `print(_mobius_v_1)`)
 
 **Integration with pdb**:
 ```python
@@ -481,11 +481,11 @@ This makes debugging natural for developers working in their native language.
 - **Classes**: PascalCase (`ASTNormalizer`)
 - **Functions**: snake_case following `type_name_verb_complement` pattern (`mapping_create_name`, `ast_normalize`, `function_save`)
 - **Constants**: UPPER_SNAKE_CASE (`PYTHON_BUILTINS`)
-- **Normalized names**: `_ouverture_v_N` (N = 0, 1, 2, ...)
+- **Normalized names**: `_mobius_v_N` (N = 0, 1, 2, ...)
 
 #### Preferred Function Naming Pattern
 
-**Note**: This is a project-specific convention that differs from traditional PEP 8 `verb_noun` patterns. Ouverture emphasizes a structured naming convention that puts the type being operated on first:
+**Note**: This is a project-specific convention that differs from traditional PEP 8 `verb_noun` patterns. Mobius emphasizes a structured naming convention that puts the type being operated on first:
 
 **Pattern**: `type_name_verb_complement`
 
@@ -509,23 +509,23 @@ This makes debugging natural for developers working in their native language.
 - **Test framework**: pytest
 - **Test structure**: All tests MUST be functions, not classes
 - **Test naming**: Use descriptive names like `test_<component>_<behavior>` (e.g., `test_ast_normalizer_visit_name_with_mapping`)
-- **Test file**: `test_ouverture.py` contains 50+ test functions
+- **Test file**: `test_mobius.py` contains 50+ test functions
 - **Documentation**: See `README_PYTEST.md` for comprehensive testing guide
 - **Normalized code strings**: All normalized code strings in tests MUST use the `normalize_code_for_test()` helper function. This ensures the code format matches `ast.unparse()` output (with proper line breaks and indentation).
 
 **Example of normalize_code_for_test usage**:
 ```python
 # Wrong - this format never exists in practice:
-normalized_code = "def _ouverture_v_0(): return 42"
+normalized_code = "def _mobius_v_0(): return 42"
 
 # Correct - use the helper function:
-normalized_code = normalize_code_for_test("def _ouverture_v_0(): return 42")
-# Returns: "def _ouverture_v_0():\n    return 42"
+normalized_code = normalize_code_for_test("def _mobius_v_0(): return 42")
+# Returns: "def _mobius_v_0():\n    return 42"
 ```
 
 ### Important Invariants
 
-1. **Function name always `_ouverture_v_0`**: First entry in name mapping
+1. **Function name always `_mobius_v_0`**: First entry in name mapping
 2. **Built-ins never renamed**: `len`, `sum`, `print`, etc. preserved
 3. **Imported names never renamed**: `math`, `Counter`, etc. preserved
 4. **Imports sorted**: Lexicographically by module name
@@ -537,9 +537,9 @@ normalized_code = normalize_code_for_test("def _ouverture_v_0(): return 42")
 
 ### Philosophy: Grey-Box Integration First
 
-Ouverture follows a **grey-box integration testing** approach as the primary testing strategy. Most tests exercise the CLI commands end-to-end while having knowledge of the internal storage format for assertions.
+Mobius follows a **grey-box integration testing** approach as the primary testing strategy. Most tests exercise the CLI commands end-to-end while having knowledge of the internal storage format for assertions.
 
-**Testing pyramid for Ouverture**:
+**Testing pyramid for Mobius**:
 1. **Integration tests (grey-box)** - Primary focus, organized by CLI command
 2. **Unit tests** - Only for complex algorithms (AST normalization, hash computation, schema migration)
 
@@ -551,11 +551,11 @@ tests/
 ├── integration/
 │   └── test_workflows.py    # End-to-end workflows combining multiple commands
 ├── add/
-│   └── test_add.py          # Tests for 'ouverture.py add' command
+│   └── test_add.py          # Tests for 'mobius.py add' command
 ├── show/
-│   └── test_show.py         # Tests for 'ouverture.py show' command
+│   └── test_show.py         # Tests for 'mobius.py show' command
 ├── get/
-│   └── test_get.py          # Tests for 'ouverture.py get' command
+│   └── test_get.py          # Tests for 'mobius.py get' command
 ├── migrate/
 │   └── test_migrate.py      # Tests for schema migration
 ├── test_internals.py        # Unit tests for complex algorithms
@@ -594,7 +594,7 @@ Unit tests are reserved for low-level components where grey-box testing would be
 - **Name mapping** (`mapping_create_name`, `mapping_compute_hash`)
 - **Hash computation** (`hash_compute` with determinism guarantees)
 - **Schema detection/migration** (`schema_detect_version`, `schema_migrate_*`)
-- **Import handling** (`imports_rewrite_ouverture`, `calls_replace_ouverture`)
+- **Import handling** (`imports_rewrite_mobius`, `calls_replace_mobius`)
 
 These tests live in `tests/test_internals.py`.
 
@@ -611,7 +611,7 @@ pytest tests/integration/ tests/add/ tests/show/ tests/get/
 pytest tests/test_internals.py tests/test_storage.py
 
 # Run with coverage
-pytest --cov=ouverture --cov-report=html
+pytest --cov=mobius --cov-report=html
 
 # Run tests matching pattern
 pytest -k "add"
@@ -627,22 +627,22 @@ pytest -k "add"
 
 ```bash
 # Add examples to pool
-python3 ouverture.py add examples/example_simple.py@eng
-python3 ouverture.py add examples/example_simple_french.py@fra
-python3 ouverture.py add examples/example_simple_spanish.py@spa
+python3 mobius.py add examples/example_simple.py@eng
+python3 mobius.py add examples/example_simple_french.py@fra
+python3 mobius.py add examples/example_simple_spanish.py@spa
 
 # Verify they share the same hash
-find ~/.local/ouverture/objects -name "*.json"  # or $OUVERTURE_DIRECTORY/objects/
+find ~/.local/mobius/objects -name "*.json"  # or $MOBIUS_DIRECTORY/objects/
 
 # Retrieve in different language
-python3 ouverture.py get HASH@eng
-python3 ouverture.py get HASH@fra
+python3 mobius.py get HASH@eng
+python3 mobius.py get HASH@fra
 ```
 
 ### Verification Checklist
 
 - [ ] Imports are sorted lexicographically
-- [ ] Function renamed to `_ouverture_v_0`
+- [ ] Function renamed to `_mobius_v_0`
 - [ ] Variables renamed sequentially
 - [ ] Built-ins NOT renamed (`sum`, `len`, `print`)
 - [ ] Imports NOT renamed (`math`, `Counter`)
@@ -661,7 +661,7 @@ python3 ouverture.py get HASH@fra
 
 Based on recent commits:
 - Use imperative mood: "Add", "Extract", "Fix"
-- Be specific: "Add 'ouverture get HASH@lang' command"
+- Be specific: "Add 'mobius get HASH@lang' command"
 - Reference context: "Extract docstrings from hash computation for multilingual support"
 
 ### Ignored Files
@@ -669,7 +669,7 @@ Based on recent commits:
 - `__pycache__/`, `*.pyc`: Python bytecode
 - `.venv/`, `.env`: Virtual environments and secrets
 
-**Note:** The function pool is now stored in `$HOME/.local/ouverture/` by default (configurable via `OUVERTURE_DIRECTORY`), so it's no longer in the project directory and doesn't need to be in `.gitignore`.
+**Note:** The function pool is now stored in `$HOME/.local/mobius/` by default (configurable via `MOBIUS_DIRECTORY`), so it's no longer in the project directory and doesn't need to be in `.gitignore`.
 
 ## Import Handling Rules
 
@@ -684,7 +684,7 @@ Understanding how imports are processed is critical to the normalization system.
 - **Before storage**: Sorted lexicographically, **no renaming**
 - **In storage**: Identical to original (e.g., `import math`)
 - **From storage**: No transformation
-- **Usage**: Names like `math`, `Counter`, `np` are **never renamed** to `_ouverture_v_X`
+- **Usage**: Names like `math`, `Counter`, `np` are **never renamed** to `_mobius_v_X`
 
 **Example:**
 ```python
@@ -693,45 +693,45 @@ from collections import Counter
 import math
 ```
 
-#### 2. Ouverture Imports (Pool Functions)
-**Examples**: `from ouverture.pool import object_abc123def as helper`
+#### 2. Mobius Imports (Pool Functions)
+**Examples**: `from mobius.pool import object_abc123def as helper`
 
-**Important**: Ouverture imports must use the `object_` prefix followed by the hash. This ensures valid Python identifiers since SHA256 hashes can start with digits (0-9), which would otherwise be invalid identifiers.
+**Important**: Mobius imports must use the `object_` prefix followed by the hash. This ensures valid Python identifiers since SHA256 hashes can start with digits (0-9), which would otherwise be invalid identifiers.
 
 **Processing**:
 
 **Before storage (normalization)**:
 ```python
-from ouverture.pool import object_abc123def as helper
+from mobius.pool import object_abc123def as helper
 ```
 ↓ becomes ↓
 ```python
-from ouverture.pool import object_abc123def
+from mobius.pool import object_abc123def
 ```
 - Alias removed: `as helper` is dropped
 - Alias tracked in `alias_mapping`: `{"abc123def": "helper"}` (actual hash without prefix)
-- Function calls transformed: `helper(x)` → `object_abc123def._ouverture_v_0(x)`
+- Function calls transformed: `helper(x)` → `object_abc123def._mobius_v_0(x)`
 
 **From storage (denormalization)**:
 ```python
-from ouverture.pool import object_abc123def
+from mobius.pool import object_abc123def
 ```
 ↓ becomes ↓
 ```python
-from ouverture.pool import object_abc123def as helper
+from mobius.pool import object_abc123def as helper
 ```
 - Language-specific alias restored: `as helper` (from `alias_mapping[lang]`)
-- Function calls transformed back: `object_abc123def._ouverture_v_0(x)` → `helper(x)`
+- Function calls transformed back: `object_abc123def._mobius_v_0(x)` → `helper(x)`
 
 ### Why This Design?
 
 - **Standard imports** are universal (same across all languages)
-- **Ouverture imports** have language-specific aliases:
-  - English: `from ouverture.pool import object_abc123 as helper`
-  - French: `from ouverture.pool import object_abc123 as assistant`
-  - Spanish: `from ouverture.pool import object_abc123 as ayudante`
+- **Mobius imports** have language-specific aliases:
+  - English: `from mobius.pool import object_abc123 as helper`
+  - French: `from mobius.pool import object_abc123 as assistant`
+  - Spanish: `from mobius.pool import object_abc123 as ayudante`
 
-All normalize to: `from ouverture.pool import object_abc123`, ensuring identical hashes.
+All normalize to: `from mobius.pool import object_abc123`, ensuring identical hashes.
 
 The `object_` prefix is required because SHA256 hashes can start with digits (0-9), which would make them invalid Python identifiers.
 
@@ -744,9 +744,9 @@ The `object_` prefix is required because SHA256 hashes can start with digits (0-
 2. Sort imports lexicographically
 3. Extract function definition
 4. Extract docstring from function
-5. Rewrite ouverture imports (remove aliases)
-6. Create name mapping (excluding builtins, imports, ouverture aliases)
-7. Replace ouverture calls (alias → HASH._ouverture_v_0)
+5. Rewrite mobius imports (remove aliases)
+6. Create name mapping (excluding builtins, imports, mobius aliases)
+7. Replace mobius calls (alias → HASH._mobius_v_0)
 8. Apply name normalization
 9. Clear AST location info
 10. Unparse to normalized code
@@ -765,7 +765,7 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 
 ### Public-Facing Hash Specification
 
-**Public hashes** in Ouverture refer to content-addressed identifiers that follow strict deterministic serialization rules to ensure global consistency.
+**Public hashes** in Mobius refer to content-addressed identifiers that follow strict deterministic serialization rules to ensure global consistency.
 
 #### Hash Computation Rules
 
@@ -790,7 +790,7 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 ```python
 # Canonical form for hashing (intermediate representation)
 canonical = {
-    "normalized_code": "def _ouverture_v_0(...):\n    ...",
+    "normalized_code": "def _mobius_v_0(...):\n    ...",
     "version": 0
 }
 
@@ -802,7 +802,7 @@ hash_value = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
 stored = {
     "version": 0,
     "hash": hash_value,
-    "normalized_code": "def _ouverture_v_0(...):\n    \"\"\"Docstring...\"\"\"\n    ...",
+    "normalized_code": "def _mobius_v_0(...):\n    \"\"\"Docstring...\"\"\"\n    ...",
     "docstrings": {...},
     "name_mappings": {...},
     "alias_mappings": {...}
@@ -824,7 +824,7 @@ stored = {
 3. **Don't rename built-ins**: `PYTHON_BUILTINS` set must remain untouched
 4. **Don't assume Python 3.8**: Code uses `ast.unparse()` (requires Python 3.9+)
 5. **Don't break import sorting**: Lexicographic order is part of normalization
-6. **Don't create duplicate mappings**: `_ouverture_v_0` is ALWAYS the function name
+6. **Don't create duplicate mappings**: `_mobius_v_0` is ALWAYS the function name
 
 ## Extension Points
 
@@ -839,7 +839,7 @@ stored = {
 
 - **Versioning**: JSON has `"version": 0` field for schema evolution
 - **Type checking**: Consider adding mypy type checking
-- **Testing framework**: Project uses pytest for automated testing (see `test_ouverture.py` and `README_PYTEST.md`)
+- **Testing framework**: Project uses pytest for automated testing (see `test_mobius.py` and `README_PYTEST.md`)
 - **Documentation generation**: Extract docstrings to generate docs
 - **Package distribution**: Consider setuptools/pyproject.toml for PyPI
 
@@ -847,10 +847,10 @@ stored = {
 
 When referencing code locations, use this format:
 
-- `ouverture.py:272` - ast_normalize function
-- `ouverture.py:133` - mapping_create_name function
-- `ouverture.py:20` - ASTNormalizer class
-- `ouverture.py:321` - hash_compute function
+- `mobius.py:272` - ast_normalize function
+- `mobius.py:133` - mapping_create_name function
+- `mobius.py:20` - ASTNormalizer class
+- `mobius.py:321` - hash_compute function
 
 ## Performance Considerations
 
@@ -877,7 +877,7 @@ When referencing code locations, use this format:
 
 ## Debugging Tips
 
-1. **Inspect JSON**: `cat .ouverture/objects/XX/YYY.json | python3 -m json.tool`
+1. **Inspect JSON**: `cat .mobius/objects/XX/YYY.json | python3 -m json.tool`
 2. **Check AST**: Use `ast.dump()` to inspect tree structure
 3. **Compare hashes**: Same logic should produce same hash
 4. **Verify mappings**: Check name_mappings in JSON for correctness
@@ -885,7 +885,7 @@ When referencing code locations, use this format:
 
 ## Summary
 
-Ouverture is a carefully designed system for multilingual function sharing through AST normalization. The key insight is separating logic (hashed) from presentation (language-specific names/docstrings). When modifying the code:
+Mobius is a carefully designed system for multilingual function sharing through AST normalization. The key insight is separating logic (hashed) from presentation (language-specific names/docstrings). When modifying the code:
 
 - Preserve the invariants listed above
 - Test with multiple languages

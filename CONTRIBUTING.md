@@ -1,6 +1,6 @@
-# Contributing to Ouverture
+# Contributing to Mobius
 
-Thank you for your interest in contributing to Ouverture! This project welcomes all kinds of contributions, and we're excited to have you here.
+Thank you for your interest in contributing to Mobius! This project welcomes all kinds of contributions, and we're excited to have you here.
 
 ## Philosophy: Vibe Coding Encouraged
 
@@ -11,7 +11,7 @@ This project embraces **vibe coding** - a creative, exploratory approach to deve
 - Follow your instincts when designing features
 - Share incomplete ideas - they often spark the best discussions
 
-For a comprehensive understanding of the project architecture, design decisions, and implementation details, please read **[CLAUDE.md](CLAUDE.md)**. This document is your guide to understanding how Ouverture works under the hood.
+For a comprehensive understanding of the project architecture, design decisions, and implementation details, please read **[CLAUDE.md](CLAUDE.md)**. This document is your guide to understanding how Mobius works under the hood.
 
 ## All Contributions Are Welcome
 
@@ -29,13 +29,13 @@ While code contributions are wonderful, they're not the only way to help! Valuab
 
 ### Examples Directory
 
-The `examples/` directory contains sample functions demonstrating Ouverture's capabilities:
+The `examples/` directory contains sample functions demonstrating Mobius's capabilities:
 
 - `example_simple.py` - Basic function (English)
 - `example_simple_french.py` - Same logic in French
 - `example_simple_spanish.py` - Same logic in Spanish
 - `example_with_import.py` - Function with standard library imports
-- `example_with_ouverture.py` - Function calling other pool functions
+- `example_with_mobius.py` - Function calling other pool functions
 
 These examples are great for:
 - Understanding how multilingual functions work
@@ -49,32 +49,32 @@ Try adding your own examples in different human languages!
 
 ```bash
 # Add an example function
-python3 ouverture.py add examples/example_simple.py@eng
+python3 mobius.py add examples/example_simple.py@eng
 
-# Verify it was stored (default location: $HOME/.local/ouverture)
-find $HOME/.local/ouverture/objects -name "*.json"
+# Verify it was stored (default location: $HOME/.local/mobius)
+find $HOME/.local/mobius/objects -name "*.json"
 
 # Clean up
-rm -rf $HOME/.local/ouverture
+rm -rf $HOME/.local/mobius
 ```
 
 ## Roadmap: Creative Coding for User Reach
 
-Ouverture aims to become a valuable tool for the **creative coding community**, enabling artists and designers to share algorithms across language barriers. Our vision includes:
+Mobius aims to become a valuable tool for the **creative coding community**, enabling artists and designers to share algorithms across language barriers. Our vision includes:
 
 - **p5.js integration**: Bridge Python functions with p5.js sketches for web-based creative coding
-- **Processing compatibility**: Enable Python Mode for Processing to use Ouverture functions
+- **Processing compatibility**: Enable Python Mode for Processing to use Mobius functions
 - **Creative coding testbed**: Build a gallery of generative art, visual algorithms, and interactive demos
 - **Educational outreach**: Provide multilingual examples for teaching computational creativity
 - **Community building**: Foster collaboration between creative coders from different linguistic backgrounds
 
-By targeting creative coding communities (p5.js, Processing, openFrameworks, etc.), we can demonstrate Ouverture's value while reaching artists, educators, and students worldwide. If you're interested in creative coding, consider contributing examples that showcase visual algorithms, generative patterns, or interactive systems!
+By targeting creative coding communities (p5.js, Processing, openFrameworks, etc.), we can demonstrate Mobius's value while reaching artists, educators, and students worldwide. If you're interested in creative coding, consider contributing examples that showcase visual algorithms, generative patterns, or interactive systems!
 
 ---
 
 # Testing Guide
 
-This section includes comprehensive information about testing Ouverture.
+This section includes comprehensive information about testing Mobius.
 
 ## Installation
 
@@ -107,7 +107,7 @@ pytest -v
 ### Run with coverage report:
 
 ```bash
-pytest --cov=ouverture --cov-report=html
+pytest --cov=mobius --cov-report=html
 ```
 
 ### Run specific test by name pattern:
@@ -119,7 +119,7 @@ pytest -k "ast_normalizer"
 ### Run specific test:
 
 ```bash
-pytest test_ouverture.py::test_ast_normalizer_visit_name_with_mapping
+pytest test_mobius.py::test_ast_normalizer_visit_name_with_mapping
 ```
 
 ## Test Structure
@@ -159,20 +159,20 @@ The test suite includes the following test functions:
    - Error handling for missing/multiple functions
 
 7. **create_name_mapping tests** (`test_create_name_mapping_*`)
-   - Function name mapping to _ouverture_v_0
+   - Function name mapping to _mobius_v_0
    - Sequential variable numbering
    - Built-in exclusion from renaming
    - Imported name exclusion
-   - Ouverture alias exclusion
+   - Mobius alias exclusion
 
-8. **rewrite_ouverture_imports tests** (`test_rewrite_ouverture_imports_*`)
-   - Rewriting ouverture imports to couverture
+8. **rewrite_mobius_imports tests** (`test_rewrite_mobius_imports_*`)
+   - Rewriting mobius imports to cmobius
    - Alias tracking and removal
-   - Preservation of non-ouverture imports
+   - Preservation of non-mobius imports
 
-9. **replace_ouverture_calls tests** (`test_replace_ouverture_calls_*`)
+9. **replace_mobius_calls tests** (`test_replace_mobius_calls_*`)
    - Replacing aliased function calls
-   - Transformation to HASH._ouverture_v_0 format
+   - Transformation to HASH._mobius_v_0 format
 
 10. **clear_locations tests** (`test_clear_locations_*`)
     - Clearing AST location information
@@ -185,7 +185,7 @@ The test suite includes the following test functions:
 12. **normalize_ast tests** (`test_normalize_ast_*`)
     - Simple function normalization
     - Import sorting during normalization
-    - Ouverture import handling
+    - Mobius import handling
 
 13. **compute_hash tests** (`test_compute_hash_*`)
     - Deterministic hashing
@@ -204,7 +204,7 @@ The test suite includes the following test functions:
 
 16. **denormalize_code tests** (`test_denormalize_code_*`)
     - Variable name denormalization
-    - Ouverture import restoration
+    - Mobius import restoration
     - Function call restoration
 
 ### Integration Tests
@@ -234,9 +234,9 @@ The test suite covers:
 
 - **Core AST manipulation**: All AST transformation and normalization logic
 - **Name mapping**: Function and variable name mapping/unmapping
-- **Import handling**: Both standard and ouverture imports
+- **Import handling**: Both standard and mobius imports
 - **Hash computation**: Deterministic hashing excluding docstrings
-- **Storage**: Content-addressed storage in $HOME/.local/ouverture/objects/
+- **Storage**: Content-addressed storage in $HOME/.local/mobius/objects/
 - **CLI commands**: Both `add` and `get` commands with error cases
 - **End-to-end workflows**: Complete add/get cycles and multilingual support
 
@@ -244,11 +244,11 @@ The test suite covers:
 
 ### 1. AST Normalization
 Tests verify that:
-- Function names always map to `_ouverture_v_0`
+- Function names always map to `_mobius_v_0`
 - Variables get sequential indices
 - Built-ins are never renamed
 - Imports are never renamed
-- Ouverture aliases are tracked and excluded from renaming
+- Mobius aliases are tracked and excluded from renaming
 
 ### 2. Multilingual Support
 Tests verify that:
@@ -260,7 +260,7 @@ Tests verify that:
 ### 3. Import Handling
 Tests verify that:
 - Standard imports remain unchanged
-- Ouverture imports are rewritten to couverture
+- Mobius imports are rewritten to cmobius
 - Aliases are tracked and restored correctly
 - Function calls are transformed appropriately
 
@@ -278,8 +278,8 @@ Tests verify proper error messages for:
 
 The tests use `tmp_path` pytest fixture for:
 - Creating temporary test files
-- Creating temporary ouverture directories
-- Ensuring test isolation (no pollution of actual ouverture pool in $HOME/.local/ouverture)
+- Creating temporary mobius directories
+- Ensuring test isolation (no pollution of actual mobius pool in $HOME/.local/mobius)
 
 ## Mocking
 
@@ -308,7 +308,7 @@ The workflow automatically installs dependencies from `requirements-dev.txt` and
 
 ## Contributing Tests
 
-When adding new functionality to ouverture.py:
+When adding new functionality to mobius.py:
 
 1. Write tests first (TDD approach)
 2. Ensure all existing tests still pass
@@ -320,7 +320,7 @@ When adding new functionality to ouverture.py:
 
 ### Import Errors
 
-If you get import errors, make sure ouverture.py is in the Python path:
+If you get import errors, make sure mobius.py is in the Python path:
 
 ```bash
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
@@ -334,7 +334,7 @@ Tests use temporary directories for isolation. If tests fail with path issues, e
 ### Git Ignores
 
 The following directories/files should be in .gitignore:
-- `.ouverture/` - Local function pool (if used for testing; default is $HOME/.local/ouverture)
+- `.mobius/` - Local function pool (if used for testing; default is $HOME/.local/mobius)
 - `__pycache__/` - Python bytecode
 - `.pytest_cache/` - Pytest cache
 - `htmlcov/` - Coverage reports
@@ -344,7 +344,7 @@ The following directories/files should be in .gitignore:
 
 The full test suite should complete in under 10 seconds on modern hardware. If tests are slow:
 
-1. Check for large ouverture pools in $HOME/.local/ouverture or local .ouverture directories
+1. Check for large mobius pools in $HOME/.local/mobius or local .mobius directories
 2. Ensure tmp_path fixtures are being used correctly
 3. Consider using pytest-xdist for parallel execution:
    ```bash
@@ -385,4 +385,4 @@ If you have questions or need help:
 - Check CLAUDE.md for technical details
 - Reach out to the maintainers
 
-Thank you for contributing to Ouverture!
+Thank you for contributing to Mobius!

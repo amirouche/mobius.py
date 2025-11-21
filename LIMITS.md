@@ -7,7 +7,7 @@
 3. **Async function support**: Add `ast.AsyncFunctionDef` handling
 4. **Semantic equivalence**: Detect functionally equivalent but syntactically different code
 5. **Type hint normalization**: Optionally normalize type hints for consistent hashing
-6. **Import validation**: Verify ouverture imports exist in the pool
+6. **Import validation**: Verify mobius imports exist in the pool
 7. **Cross-language support**: Extend beyond Python (JavaScript, Rust, etc.)
 8. **Version migration**: Handle schema changes in stored JSON format
 
