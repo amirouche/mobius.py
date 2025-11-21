@@ -145,12 +145,9 @@ $HOME/.local/mobius/
 - Returns: 64-character hex SHA256 hash
 
 #### `schema_detect_version(func_hash)` (lines 374-406)
-**Detects schema version of stored function**
-- Checks filesystem to determine v0 or v1 format
-- v0: `XX/YYYYYY.json` (single JSON file)
-- v1: `XX/YYYYYY.../object.json` (directory with object.json)
-- Returns: 0 (v0), 1 (v1), or None (not found)
-- Used for backward-compatible reading
+**Detects if a function exists in the pool**
+- Checks filesystem for v1 format: `sha256/XX/YYYYYY.../object.json`
+- Returns: 1 if found, None if not found
 
 #### `metadata_create()` (lines 409-435)
 **Generates default metadata for functions** (Schema v1)
@@ -159,13 +156,6 @@ $HOME/.local/mobius/
 - Empty `tags` and `dependencies` lists
 - Returns: Dictionary with metadata structure
 - Used when saving functions to v1 format
-
-#### `function_save_v0(hash_value, lang, ...)` (lines 451-493)
-**Stores function in content-addressed pool** (Schema v0 - legacy)
-- Path: `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/mobius/`, XX = first 2 chars of hash)
-- Merges with existing data if hash already exists
-- Stores per-language: docstrings, name_mappings, alias_mappings
-- **Note**: Kept for migration tool and backward compatibility. New code should use v1 functions.
 
 #### `function_save_v1(hash_value, normalized_code, metadata)` (lines 495-532)
 **Stores function in v1 format** (Schema v1)
@@ -189,13 +179,6 @@ $HOME/.local/mobius/
 - Accepts optional comment parameter for mapping variant identification
 - **This is the default save function** - all new code uses v1 format
 
-#### `function_load_v0(hash_value, lang)` (lines 772-813)
-**Loads function from pool using schema v0** (Legacy)
-- Kept for backward compatibility with v0 format
-- Reads single JSON file: `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json`
-- Returns: (normalized_code, name_mapping, alias_mapping, docstring)
-- **Note**: Use function_load() which auto-detects v0/v1
-
 #### `function_load_v1(hash_value)` (lines 816-848)
 **Loads function from pool using schema v1**
 - Reads object.json: `$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json`
@@ -216,21 +199,18 @@ $HOME/.local/mobius/
 - Content-addressed storage enables deduplication
 
 #### `function_load(hash_value, lang, mapping_hash=None)` (lines 953-1011)
-**Main entry point for loading functions** (Dispatches to v0 or v1)
-- Detects schema version using schema_detect_version()
-- If v0: Routes to function_load_v0() for backward compatibility
-- If v1: Routes to function_load_v1() + mapping_load_v1()
-- If multiple v1 mappings exist and no mapping_hash specified, picks first alphabetically
+**Main entry point for loading functions**
+- Calls function_load_v1() + mapping_load_v1()
+- If multiple mappings exist and no mapping_hash specified, picks first alphabetically
 - Returns: Tuple of (normalized_code, name_mapping, alias_mapping, docstring)
-- **This is the default load function** - auto-detects format
+- **This is the default load function**
 
 #### `function_show(hash_with_lang_and_mapping)` (lines 1014-1107)
-**Show function with mapping exploration and selection** (Phase 5)
+**Show function with mapping exploration and selection**
 - Supports three formats: `HASH@LANG`, `HASH@LANG@MAPPING_HASH`
 - Single mapping: Outputs code directly to stdout
 - Multiple mappings: Displays selection menu with copyable commands and comments
 - Explicit mapping hash: Directly outputs specified mapping
-- V0 backward compatible: Automatically handles v0 format (single mapping per language)
 - Uses function_load() + code_denormalize() to reconstruct original code
 - **This is the recommended command** for exploring and viewing functions
 - **Note**: CLI command `mobius.py show HASH@lang[@mapping_hash]`
@@ -241,23 +221,6 @@ $HOME/.local/mobius/
 - Rewrites imports: `from mobius.pool import X` → `from mobius.pool import X as alias` (restores alias)
 - Transforms calls: `HASH._mobius_v_0(...)` → `alias(...)`
 
-#### `schema_migrate_function_v0_to_v1(func_hash, keep_v0=False)` (lines 1054-1118)
-**Migrate single function from v0 to v1** (Schema Migration)
-- Loads v0 data from single JSON file
-- Creates v1 object.json with metadata
-- Migrates each language mapping to separate mapping.json files
-- Validates migration before completion
-- Optionally deletes v0 file (default: delete)
-- **Note**: CLI command `mobius.py migrate HASH [--keep-v0]`
-
-#### `schema_migrate_all_v0_to_v1(keep_v0=False, dry_run=False)` (lines 1121-1172)
-**Migrate all v0 functions to v1** (Schema Migration)
-- Scans objects directory for v0 files
-- Migrates each function using schema_migrate_function_v0_to_v1()
-- Supports dry-run mode (shows what would be migrated)
-- Returns list of migrated function hashes
-- **Note**: CLI command `mobius.py migrate [--keep-v0] [--dry-run]`
-
 #### `schema_validate_v1(func_hash)` (lines 1175-1239)
 **Validate v1 function structure** (Schema Validation)
 - Checks object.json exists and has required fields
@@ -267,38 +230,6 @@ $HOME/.local/mobius/
 - **Note**: CLI command `mobius.py validate HASH`
 
 ### Storage Schema
-
-#### Current Schema (v0)
-
-Functions are stored in `$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json` (default: `$HOME/.local/mobius/objects/XX/YYYYYY.json`) where XX is the first 2 characters of the hash.
-
-```json
-{
-  "version": 0,
-  "hash": "abc123def456...",
-  "normalized_code": "def _mobius_v_0(...):\n    ...",
-  "docstrings": {
-    "eng": "Calculate the average...",
-    "fra": "Calculer la moyenne..."
-  },
-  "name_mappings": {
-    "eng": {"_mobius_v_0": "calculate_average", "_mobius_v_1": "numbers"},
-    "fra": {"_mobius_v_0": "calculer_moyenne", "_mobius_v_1": "nombres"}
-  },
-  "alias_mappings": {
-    "eng": {"abc123": "helper"},
-    "fra": {"abc123": "assistant"}
-  }
-}
-```
-
-**Current limitations**:
-- Language codes limited to 3 characters (ISO 639-3)
-- Only one mapping per language
-- Mappings stored inline (no deduplication)
-- Limited extensibility
-
-#### Future Schema (v1) - Implemented
 
 See `ROADMAP.md` for the comprehensive development plan.
 
@@ -399,7 +330,7 @@ mobius.py search [NAME | URL] [QUERY...]    # Search and list functions by query
 - `init` command: Initialize mobius directory and config file
 - `whoami` command: Get/set user configuration (username, email, public-key, language)
 - `add` command: Parses file, normalizes AST, computes hash, saves to local pool
-- `show` command: Shows function with mapping exploration and selection (v0 and v1 compatible)
+- `show` command: Shows function with mapping exploration and selection
 - `get` command: Retrieves function from local pool, denormalizes to target language
 - `translate` command: Add translation for existing function (interactive prompts)
 - `run` command: Execute function interactively
@@ -409,8 +340,7 @@ mobius.py search [NAME | URL] [QUERY...]    # Search and list functions by query
 - `search` command: Search and list functions by query
 - `remote add/remove/list` commands: Manage remote repositories
 - `remote pull/push` commands: Fetch/publish functions (file:// URLs supported, HTTP/HTTPS planned)
-- `migrate` command: Migrates functions from v0 to v1 schema format
-- `validate` command: Validates v1 function structure
+- `validate` command: Validates function structure
 
 **Status**: All commands from the target CLI interface are now implemented. HTTP/HTTPS remotes are planned for future development.
 
@@ -541,7 +471,7 @@ Mobius follows a **grey-box integration testing** approach as the primary testin
 
 **Testing pyramid for Mobius**:
 1. **Integration tests (grey-box)** - Primary focus, organized by CLI command
-2. **Unit tests** - Only for complex algorithms (AST normalization, hash computation, schema migration)
+2. **Unit tests** - Only for complex algorithms (AST normalization, hash computation, schema validation)
 
 ### Directory Structure
 
@@ -556,8 +486,6 @@ tests/
 │   └── test_show.py         # Tests for 'mobius.py show' command
 ├── get/
 │   └── test_get.py          # Tests for 'mobius.py get' command
-├── migrate/
-│   └── test_migrate.py      # Tests for schema migration
 ├── test_internals.py        # Unit tests for complex algorithms
 └── test_storage.py          # Storage schema validation tests
 ```
@@ -593,7 +521,7 @@ Unit tests are reserved for low-level components where grey-box testing would be
 - **AST normalization** (`ASTNormalizer` class, `ast_normalize` function)
 - **Name mapping** (`mapping_create_name`, `mapping_compute_hash`)
 - **Hash computation** (`hash_compute` with determinism guarantees)
-- **Schema detection/migration** (`schema_detect_version`, `schema_migrate_*`)
+- **Schema validation** (`schema_detect_version`, `schema_validate_v1`)
 - **Import handling** (`imports_rewrite_mobius`, `calls_replace_mobius`)
 
 These tests live in `tests/test_internals.py`.
@@ -789,25 +717,22 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 
 ```python
 # Canonical form for hashing (intermediate representation)
-canonical = {
-    "normalized_code": "def _mobius_v_0(...):\n    ...",
-    "version": 0
-}
+# Hash is computed on normalized code WITHOUT docstring
+canonical_code = "def _mobius_v_0(...):\n    ..."
 
-# Compute hash from canonical JSON
-canonical_json = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
-hash_value = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+# Compute hash from code
+hash_value = hashlib.sha256(canonical_code.encode('utf-8')).hexdigest()
 
-# Stored JSON may include additional fields
+# Stored object.json includes additional metadata
 stored = {
-    "version": 0,
+    "schema_version": 1,
     "hash": hash_value,
+    "hash_algorithm": "sha256",
     "normalized_code": "def _mobius_v_0(...):\n    \"\"\"Docstring...\"\"\"\n    ...",
-    "docstrings": {...},
-    "name_mappings": {...},
-    "alias_mappings": {...}
+    "encoding": "none",
+    "metadata": {...}
 }
-# Hash of stored JSON ≠ hash_value
+# Hash of stored JSON ≠ hash_value (hash is of code only)
 ```
 
 #### Implications
@@ -837,7 +762,6 @@ stored = {
 
 ### Future Considerations
 
-- **Versioning**: JSON has `"version": 0` field for schema evolution
 - **Type checking**: Consider adding mypy type checking
 - **Testing framework**: Project uses pytest for automated testing (see `test_mobius.py` and `README_PYTEST.md`)
 - **Documentation generation**: Extract docstrings to generate docs
