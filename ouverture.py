@@ -192,7 +192,7 @@ def rewrite_ouverture_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
     for imp in imports:
         if isinstance(imp, ast.ImportFrom) and imp.module == 'ouverture':
             # Rewrite: from ouverture import c0ffeebad as kawa
-            # To: from couverture import c0ffeebad
+            # To: from ouverture import c0ffeebad
             new_names = []
             for alias in imp.names:
                 # Track the alias mapping

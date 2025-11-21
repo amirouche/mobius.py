@@ -311,10 +311,6 @@ from ouverture import abc123def as helper
 
 All normalize to: `from ouverture import abc123`, ensuring identical hashes.
 
-### Known Issue
-
-**TYPO IN CURRENT CODE**: The implementation uses `couverture` instead of `ouverture` in normalized imports. This is a bug that should be fixed. The correct behavior is to keep the module name as `ouverture` and only remove/restore aliases. See GitHub issue for details.
-
 ## Key Algorithms
 
 ### AST Normalization Algorithm

@@ -395,9 +395,9 @@ def test_rewrite_ouverture_imports_with_alias():
 
     new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
 
-    # Should rewrite to couverture without alias
+    # Should remove alias but keep ouverture module name
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from couverture import abc123" in result
+    assert "from ouverture import abc123" in result
     assert "as helper" not in result
 
     # Should track the alias
@@ -413,7 +413,7 @@ def test_rewrite_ouverture_imports_without_alias():
     new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from couverture import abc123" in result
+    assert "from ouverture import abc123" in result
     assert len(alias_mapping) == 0
 
 
@@ -598,8 +598,8 @@ def foo(x):
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
         ouverture.normalize_ast(tree, "eng")
 
-    # Should rewrite to couverture
-    assert "from couverture import abc123" in code_with_doc
+    # Should remove alias but keep ouverture module name
+    assert "from ouverture import abc123" in code_with_doc
     assert "as helper" not in code_with_doc
 
     # Should track alias
@@ -790,7 +790,7 @@ def _ouverture_v_0(_ouverture_v_1, _ouverture_v_2):
 def test_denormalize_code_ouverture_imports():
     """Test denormalizing ouverture imports"""
     normalized = """
-from couverture import abc123
+from ouverture import abc123
 
 def _ouverture_v_0(_ouverture_v_1):
     return abc123._ouverture_v_0(_ouverture_v_1)
