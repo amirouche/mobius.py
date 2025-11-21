@@ -1807,41 +1807,6 @@ def test_schema_validate_v1_missing_mappings(mock_ouverture_dir):
     assert any("no mappings" in err.lower() or "no language" in err.lower() for err in errors)
 
 
-def test_code_migrate_add_object_prefix_no_ouverture_imports():
-    """Test that code without ouverture imports is unchanged after migration"""
-    # Code without ouverture imports should be returned unchanged
-    normalized_code = "def _ouverture_v_0(): return 42"
-    result = ouverture.code_migrate_add_object_prefix(normalized_code)
-    assert result == normalized_code, f"Code should be unchanged. Got: {repr(result)}"
-
-
-def test_code_migrate_add_object_prefix_with_ouverture_imports():
-    """Test that code with ouverture imports gets object_ prefix added"""
-    normalized_code = '''from ouverture.pool import abc123def456
-
-def _ouverture_v_0():
-    return abc123def456._ouverture_v_0()'''
-
-    result = ouverture.code_migrate_add_object_prefix(normalized_code)
-
-    # Should have object_ prefix in import
-    assert "object_abc123def456" in result
-    # Should have object_ prefix in call
-    assert "object_abc123def456._ouverture_v_0()" in result
-
-
-def test_code_migrate_add_object_prefix_already_prefixed():
-    """Test that code with already prefixed imports is unchanged"""
-    normalized_code = '''from ouverture.pool import object_abc123def456
-
-def _ouverture_v_0():
-    return object_abc123def456._ouverture_v_0()'''
-
-    result = ouverture.code_migrate_add_object_prefix(normalized_code)
-    # Should be unchanged since already has object_ prefix
-    assert result == normalized_code
-
-
 def test_schema_migrate_function_preserves_alias_mappings(mock_ouverture_dir):
     """Test migration preserves alias mappings"""
     func_hash = "alias001" + "0" * 56

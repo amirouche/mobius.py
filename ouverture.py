@@ -2201,25 +2201,9 @@ def code_migrate_add_object_prefix(normalized_code: str) -> str:
         normalized_code: Normalized code in v0 format (imports without object_ prefix)
 
     Returns:
-        Migrated code with object_ prefix added to ouverture imports and calls.
-        Returns unchanged if no ouverture imports need migration.
+        Migrated code with object_ prefix added to ouverture imports and calls
     """
     tree = ast.parse(normalized_code)
-
-    # Check if there are any ouverture imports that need the prefix
-    needs_migration = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == 'ouverture.pool':
-            for alias in node.names:
-                if not alias.name.startswith(OUVERTURE_IMPORT_PREFIX):
-                    needs_migration = True
-                    break
-            if needs_migration:
-                break
-
-    # Return unchanged if no migration needed
-    if not needs_migration:
-        return normalized_code
 
     class PrefixAdder(ast.NodeTransformer):
         def visit_ImportFrom(self, node):
