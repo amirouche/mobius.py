@@ -71,7 +71,7 @@ python3 ouverture.py add my_math.py@eng
 
 ```python
 # my_compose.py
-from ouverture import abc123def as helper
+from ouverture.pool import abc123def as helper
 
 def process_data(items):
     """Process items using helper."""
@@ -84,7 +84,7 @@ python3 ouverture.py add my_compose.py@eng
 ```
 
 **Expected result:**
-- Import rewritten: `from couverture import abc123def`
+- Import rewritten: `from ouverture.pool import abc123def`
 - Call rewritten: `helper(items)` → `abc123def._ouverture_v_0(items)`
 - Alias mapping stored: `{"abc123def": "helper"}`
 

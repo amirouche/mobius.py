@@ -190,9 +190,9 @@ def rewrite_ouverture_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
     alias_mapping = {}
 
     for imp in imports:
-        if isinstance(imp, ast.ImportFrom) and imp.module == 'ouverture':
-            # Rewrite: from ouverture import c0ffeebad as kawa
-            # To: from ouverture import c0ffeebad
+        if isinstance(imp, ast.ImportFrom) and imp.module == 'ouverture.pool':
+            # Rewrite: from ouverture.pool import c0ffeebad as kawa
+            # To: from ouverture.pool import c0ffeebad
             new_names = []
             for alias in imp.names:
                 # Track the alias mapping
@@ -202,7 +202,7 @@ def rewrite_ouverture_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
                 new_names.append(ast.alias(name=alias.name, asname=None))
 
             new_imp = ast.ImportFrom(
-                module='ouverture',
+                module='ouverture.pool',
                 names=new_names,
                 level=0
             )
@@ -406,9 +406,9 @@ def denormalize_code(normalized_code: str, name_mapping: Dict[str, str], alias_m
             return node
 
         def visit_ImportFrom(self, node):
-            # Add aliases back to 'from ouverture import X'
-            if node.module == 'ouverture':
-                node.module = 'ouverture'
+            # Add aliases back to 'from ouverture.pool import X'
+            if node.module == 'ouverture.pool':
+                node.module = 'ouverture.pool'
                 # Add aliases back
                 new_names = []
                 for alias_node in node.names:

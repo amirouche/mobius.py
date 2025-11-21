@@ -389,15 +389,15 @@ def foo(x):
 
 def test_rewrite_ouverture_imports_with_alias():
     """Test rewriting ouverture import with alias"""
-    code = "from ouverture import abc123 as helper"
+    code = "from ouverture.pool import abc123 as helper"
     tree = ast.parse(code)
     imports = tree.body
 
     new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
 
-    # Should remove alias but keep ouverture module name
+    # Should remove alias but keep ouverture.pool module name
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from ouverture import abc123" in result
+    assert "from ouverture.pool import abc123" in result
     assert "as helper" not in result
 
     # Should track the alias
@@ -406,14 +406,14 @@ def test_rewrite_ouverture_imports_with_alias():
 
 def test_rewrite_ouverture_imports_without_alias():
     """Test rewriting ouverture import without alias"""
-    code = "from ouverture import abc123"
+    code = "from ouverture.pool import abc123"
     tree = ast.parse(code)
     imports = tree.body
 
     new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
-    assert "from ouverture import abc123" in result
+    assert "from ouverture.pool import abc123" in result
     assert len(alias_mapping) == 0
 
 
@@ -587,7 +587,7 @@ def foo():
 def test_normalize_ast_with_ouverture_import():
     """Test normalizing function with ouverture import"""
     code = """
-from ouverture import abc123 as helper
+from ouverture.pool import abc123 as helper
 
 def foo(x):
     \"\"\"Process with helper\"\"\"
@@ -598,8 +598,8 @@ def foo(x):
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
         ouverture.normalize_ast(tree, "eng")
 
-    # Should remove alias but keep ouverture module name
-    assert "from ouverture import abc123" in code_with_doc
+    # Should remove alias but keep ouverture.pool module name
+    assert "from ouverture.pool import abc123" in code_with_doc
     assert "as helper" not in code_with_doc
 
     # Should track alias
@@ -790,7 +790,7 @@ def _ouverture_v_0(_ouverture_v_1, _ouverture_v_2):
 def test_denormalize_code_ouverture_imports():
     """Test denormalizing ouverture imports"""
     normalized = """
-from ouverture import abc123
+from ouverture.pool import abc123
 
 def _ouverture_v_0(_ouverture_v_1):
     return abc123._ouverture_v_0(_ouverture_v_1)
@@ -806,7 +806,7 @@ def _ouverture_v_0(_ouverture_v_1):
     result = ouverture.denormalize_code(normalized, name_mapping, alias_mapping)
 
     # Should restore import with alias
-    assert "from ouverture import abc123 as helper" in result
+    assert "from ouverture.pool import abc123 as helper" in result
 
     # Should restore function calls
     assert "helper(data)" in result

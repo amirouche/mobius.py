@@ -1,4 +1,4 @@
-from ouverture import c0ffeebad as kawa
+from ouverture.pool import c0ffeebad as kawa
 
 def combine_results(data):
     """Combine results using kawa function."""

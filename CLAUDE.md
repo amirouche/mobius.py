@@ -76,7 +76,7 @@ hello-claude/
 - Sorts imports lexicographically
 - Extracts function definition and imports
 - Extracts docstring separately
-- Rewrites `from ouverture import X as Y` → `from ouverture import X` (removes alias)
+- Rewrites `from ouverture.pool import X as Y` → `from ouverture.pool import X` (removes alias)
 - Creates name mappings (`original → _ouverture_v_X`)
 - Returns: normalized code (with/without docstring), docstring, mappings
 
@@ -89,7 +89,7 @@ hello-claude/
 
 #### `rewrite_ouverture_imports(imports)` (lines 183-213)
 **Transforms ouverture imports for normalization**
-- Rewrites: `from ouverture import HASH as alias` → `from ouverture import HASH` (removes alias)
+- Rewrites: `from ouverture.pool import HASH as alias` → `from ouverture.pool import HASH` (removes alias)
 - Tracks alias mappings for later denormalization
 - Necessary because normalized code uses `HASH._ouverture_v_0(...)` instead of `alias(...)`
 
@@ -112,7 +112,7 @@ hello-claude/
 #### `denormalize_code(normalized_code, name_mapping, alias_mapping)` (lines 364-429)
 **Reconstructs original-looking code**
 - Reverses variable renaming: `_ouverture_v_X → original_name`
-- Rewrites imports: `from ouverture import X` → `from ouverture import X as alias` (restores alias)
+- Rewrites imports: `from ouverture.pool import X` → `from ouverture.pool import X as alias` (restores alias)
 - Transforms calls: `HASH._ouverture_v_0(...)` → `alias(...)`
 
 ### CLI Commands
@@ -276,17 +276,17 @@ import math
 ```
 
 #### 2. Ouverture Imports (Pool Functions)
-**Examples**: `from ouverture import abc123def as helper`
+**Examples**: `from ouverture.pool import abc123def as helper`
 
 **Processing**:
 
 **Before storage (normalization)**:
 ```python
-from ouverture import abc123def as helper
+from ouverture.pool import abc123def as helper
 ```
 ↓ becomes ↓
 ```python
-from ouverture import abc123def
+from ouverture.pool import abc123def
 ```
 - Alias removed: `as helper` is dropped
 - Alias tracked in `alias_mapping`: `{"abc123def": "helper"}`
@@ -294,11 +294,11 @@ from ouverture import abc123def
 
 **From storage (denormalization)**:
 ```python
-from ouverture import abc123def
+from ouverture.pool import abc123def
 ```
 ↓ becomes ↓
 ```python
-from ouverture import abc123def as helper
+from ouverture.pool import abc123def as helper
 ```
 - Language-specific alias restored: `as helper` (from `alias_mapping[lang]`)
 - Function calls transformed back: `abc123def._ouverture_v_0(x)` → `helper(x)`
@@ -307,11 +307,11 @@ from ouverture import abc123def as helper
 
 - **Standard imports** are universal (same across all languages)
 - **Ouverture imports** have language-specific aliases:
-  - English: `from ouverture import abc123 as helper`
-  - French: `from ouverture import abc123 as assistant`
-  - Spanish: `from ouverture import abc123 as ayudante`
+  - English: `from ouverture.pool import abc123 as helper`
+  - French: `from ouverture.pool import abc123 as assistant`
+  - Spanish: `from ouverture.pool import abc123 as ayudante`
 
-All normalize to: `from ouverture import abc123`, ensuring identical hashes.
+All normalize to: `from ouverture.pool import abc123`, ensuring identical hashes.
 
 ## Key Algorithms
 

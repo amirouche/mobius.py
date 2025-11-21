@@ -153,14 +153,14 @@ Import names (`Counter`) are preserved, variable names (`items`) are normalized.
 Functions can reference other functions from the pool:
 
 ```python
-from ouverture import abc123def as helper
+from ouverture.pool import abc123def as helper
 
 def process_data(values):
     """Process data using helper function"""
     return helper(values)
 ```
 
-The import is normalized to `from ouverture import abc123def`, making it language-agnostic.
+The import is normalized to `from ouverture.pool import abc123def`, making it language-agnostic.
 
 ## Why "Ouverture"?
 
