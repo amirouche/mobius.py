@@ -10,62 +10,85 @@ Learn by doing! Copy and paste these commands to see how ouverture works.
 # Add a simple function (English)
 python3 ouverture.py add examples/example_simple.py@eng
 
-# Add the same function in French
+# Add the same function in French (same code, different docstring)
 python3 ouverture.py add examples/example_simple_french.py@fra
 
-# Add the same function in Spanish
+# Add the same function in Spanish (same code, different docstring)
 python3 ouverture.py add examples/example_simple_spanish.py@spa
 ```
 
 **Expected output:**
 ```
-Function added: b4f52910a8c7d3e2f1a6b9c4d5e8f7a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6
+Function saved (v1): /root/.local/ouverture/objects/sha256/b4/f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf/object.json
+Hash: b4f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf
+Mapping saved (v1): /root/.local/ouverture/objects/sha256/b4/.../eng/sha256/ab/80a39719e18c484a7b4f2394c0431e238eb93e8d7257a1ce3515a7b705d8b1/mapping.json
+Language: eng
+Mapping hash: ab80a39719e18c484a7b4f2394c0431e238eb93e8d7257a1ce3515a7b705d8b1
 ```
 
-All three versions share the same hash because they have identical logic!
+All three versions share the same **function hash** but have different **mapping hashes**!
 
 ### 2. View the function
 
 ```bash
 # Show the English version
-python3 ouverture.py show b4f52910a8c7d3e2f1a6b9c4d5e8f7a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6@eng
+python3 ouverture.py show b4f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf@eng
 
-# Show the French version (same hash, different names)
-python3 ouverture.py show b4f52910a8c7d3e2f1a6b9c4d5e8f7a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6@fra
+# Show the French version (same hash, different docstring)
+python3 ouverture.py show b4f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf@fra
 ```
 
 **Expected output (English):**
 ```python
-def calculate_sum(a, b):
+def calculate_sum(first_number, second_number):
     """Calculate the sum of two numbers."""
-    result = a + b
+    result = first_number + second_number
     return result
 ```
 
 **Expected output (French):**
 ```python
-def calculer_somme(a, b):
+def calculate_sum(first_number, second_number):
     """Calculer la somme de deux nombres."""
-    resultat = a + b
-    return resultat
+    result = first_number + second_number
+    return result
 ```
+
+The French version has the same variable names but a French docstring!
 
 ### 3. Explore the function pool
 
 ```bash
-# List all stored functions
+# List all stored functions and mappings
 find ~/.local/ouverture/objects -name "*.json"
 ```
 
 **Expected output:**
 ```
-/home/user/.local/ouverture/objects/b4/f52910a8c7d3e2f1a6b9c4d5e8f7a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.json
+/root/.local/ouverture/objects/sha256/b4/f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf/object.json
+/root/.local/ouverture/objects/sha256/b4/f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf/eng/sha256/ab/80a39719e18c484a7b4f2394c0431e238eb93e8d7257a1ce3515a7b705d8b1/mapping.json
+/root/.local/ouverture/objects/sha256/b4/f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf/fra/sha256/e1/474c45d29c2f3c825082a7f240a2cecd335df9f5375391ec309451705bb98f/mapping.json
+/root/.local/ouverture/objects/sha256/b4/f52910fb4b02ce1d65269bd404a5fcf66451f79d28e0094303f9e66f1e6faf/spa/sha256/a0/9ad2e8f3c5fa4065d05bcea5678eba7607c32827c0911acb6f69851a26cf96/mapping.json
 ```
 
 **What's in `~/.local/ouverture/`?**
-- `objects/XX/YYYYYY.json` - Functions stored by their hash
-- Each function can have multiple language variants (English, French, Spanish, etc.)
-- The hash is based on logic, not variable names or comments
+```
+~/.local/ouverture/objects/
+  sha256/                    # Hash algorithm
+    b4/                      # First 2 chars of function hash
+      f52910fb4b.../         # Full function hash (directory)
+        object.json          # Normalized function code
+        eng/                 # English language mappings
+          sha256/ab/80a39.../mapping.json
+        fra/                 # French language mappings
+          sha256/e1/474c.../mapping.json
+        spa/                 # Spanish language mappings
+          sha256/a0/9ad2.../mapping.json
+```
+
+- One `object.json` per function (stores normalized code)
+- Separate `mapping.json` files for each language variant (stores variable names and docstrings)
+- Content-addressed: identical logic = same function hash, identical mappings = same mapping hash
 
 ## Try More Examples
 
@@ -100,11 +123,14 @@ python3 ouverture.py show <HASH>@spa
 When you add a function, ouverture:
 
 1. **Normalizes** the code: Variables get renamed to `_ouverture_v_0`, `_ouverture_v_1`, etc.
-2. **Computes a hash** based on logic (not variable names or comments)
-3. **Stores** the function in `~/.local/ouverture/objects/XX/YYYYYY.json`
-4. **Saves** language-specific names so you can retrieve it in any language
+2. **Computes a function hash** based on logic (not variable names or docstrings)
+3. **Stores** the normalized code in `object.json`
+4. **Computes a mapping hash** based on variable names and docstring
+5. **Stores** the language-specific mapping in `mapping.json`
 
-The magic: same logic → same hash, even across different human languages!
+The magic:
+- Same logic → same **function hash** (shared across languages)
+- Same variable names + docstring → same **mapping hash** (deduplication)
 
 ## Clean Up
 
