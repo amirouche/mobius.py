@@ -231,7 +231,7 @@ MIT (see LICENSE file)
 
 - **[Unison](https://www.unison-lang.org/)**: Content-addressable code where the hash is the identity
 - **[Abstract Wikipedia](https://meta.wikimedia.org/wiki/Abstract_Wikipedia)**: Multilingual knowledge representation that separates meaning from language
-- **Situated Software**: Local, contextual solutions that can scale globally
+- **[Situational application](https://en.wikipedia.org/wiki/Situational_application)**: Also known as **Situated Software**: Local, contextual solutions
 
 ### Similar Projects & Research Areas
 
