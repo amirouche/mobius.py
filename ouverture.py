@@ -40,7 +40,7 @@ class ASTNormalizer(ast.NodeTransformer):
         return node
 
 
-def collect_names(tree: ast.Module) -> Set[str]:
+def names_collect(tree: ast.Module) -> Set[str]:
     """Collect all names (variables, functions) used in the AST"""
     names = set()
 
@@ -55,7 +55,7 @@ def collect_names(tree: ast.Module) -> Set[str]:
     return names
 
 
-def get_imported_names(tree: ast.Module) -> Set[str]:
+def imports_get_names(tree: ast.Module) -> Set[str]:
     """Get all names that are imported"""
     imported = set()
 
@@ -70,7 +70,7 @@ def get_imported_names(tree: ast.Module) -> Set[str]:
     return imported
 
 
-def check_unused_imports(tree: ast.Module, imported_names: Set[str], all_names: Set[str]) -> bool:
+def imports_check_unused(tree: ast.Module, imported_names: Set[str], all_names: Set[str]) -> bool:
     """Check if all imports are used"""
     for name in imported_names:
         # Check if the imported name is used anywhere besides the import statement
@@ -86,7 +86,7 @@ def check_unused_imports(tree: ast.Module, imported_names: Set[str], all_names: 
     return True
 
 
-def sort_imports(tree: ast.Module) -> ast.Module:
+def imports_sort(tree: ast.Module) -> ast.Module:
     """Sort imports lexicographically"""
     imports = []
     other_nodes = []
@@ -111,7 +111,7 @@ def sort_imports(tree: ast.Module) -> ast.Module:
     return tree
 
 
-def extract_function_def(tree: ast.Module) -> Tuple[ast.FunctionDef, List[ast.stmt]]:
+def function_extract_definition(tree: ast.Module) -> Tuple[ast.FunctionDef, List[ast.stmt]]:
     """Extract the function definition and import statements"""
     imports = []
     function_def = None
@@ -130,7 +130,7 @@ def extract_function_def(tree: ast.Module) -> Tuple[ast.FunctionDef, List[ast.st
     return function_def, imports
 
 
-def create_name_mapping(function_def: ast.FunctionDef, imports: List[ast.stmt],
+def mapping_create_name(function_def: ast.FunctionDef, imports: List[ast.stmt],
                         ouverture_aliases: Set[str] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Create mapping from original names to normalized names.
@@ -180,7 +180,7 @@ def create_name_mapping(function_def: ast.FunctionDef, imports: List[ast.stmt],
     return forward_mapping, reverse_mapping
 
 
-def rewrite_ouverture_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
+def imports_rewrite_ouverture(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
     """
     Remove aliases from 'ouverture' imports and track them for later restoration.
     Returns (new_imports, alias_mapping)
@@ -213,7 +213,7 @@ def rewrite_ouverture_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], 
     return new_imports, alias_mapping
 
 
-def replace_ouverture_calls(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
+def calls_replace_ouverture(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
     """
     Replace calls to aliased ouverture functions.
     E.g., kawa(...) becomes c0ffeebad._ouverture_v_0(...)
@@ -235,7 +235,7 @@ def replace_ouverture_calls(tree: ast.AST, alias_mapping: Dict[str, str], name_m
     return replacer.visit(tree)
 
 
-def clear_locations(tree: ast.AST):
+def ast_clear_locations(tree: ast.AST):
     """Set all line and column information to None"""
     for node in ast.walk(tree):
         if hasattr(node, 'lineno'):
@@ -248,7 +248,7 @@ def clear_locations(tree: ast.AST):
             node.end_col_offset = None
 
 
-def extract_docstring(function_def: ast.FunctionDef) -> Tuple[str, ast.FunctionDef]:
+def docstring_extract(function_def: ast.FunctionDef) -> Tuple[str, ast.FunctionDef]:
     """
     Extract docstring from function definition.
     Returns (docstring, function_without_docstring)
@@ -269,28 +269,28 @@ def extract_docstring(function_def: ast.FunctionDef) -> Tuple[str, ast.FunctionD
     return docstring if docstring else "", func_copy
 
 
-def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
+def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
     """
     Normalize the AST according to ouverture rules.
     Returns (normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping)
     """
     # Sort imports
-    tree = sort_imports(tree)
+    tree = imports_sort(tree)
 
     # Extract function and imports
-    function_def, imports = extract_function_def(tree)
+    function_def, imports = function_extract_definition(tree)
 
     # Extract docstring from function
-    docstring, function_without_docstring = extract_docstring(function_def)
+    docstring, function_without_docstring = docstring_extract(function_def)
 
     # Rewrite ouverture imports
-    imports, alias_mapping = rewrite_ouverture_imports(imports)
+    imports, alias_mapping = imports_rewrite_ouverture(imports)
 
     # Get the set of ouverture aliases (values in alias_mapping)
     ouverture_aliases = set(alias_mapping.values())
 
     # Create name mapping
-    forward_mapping, reverse_mapping = create_name_mapping(function_def, imports, ouverture_aliases)
+    forward_mapping, reverse_mapping = mapping_create_name(function_def, imports, ouverture_aliases)
 
     # Create two modules: one with docstring (for display) and one without (for hashing)
     module_with_docstring = ast.Module(body=imports + [function_def], type_ignores=[])
@@ -299,14 +299,14 @@ def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
     # Process both modules identically
     for module in [module_with_docstring, module_without_docstring]:
         # Replace ouverture calls with their normalized form
-        module = replace_ouverture_calls(module, alias_mapping, forward_mapping)
+        module = calls_replace_ouverture(module, alias_mapping, forward_mapping)
 
         # Normalize names
         normalizer = ASTNormalizer(forward_mapping)
         normalizer.visit(module)
 
         # Clear locations
-        clear_locations(module)
+        ast_clear_locations(module)
 
         # Fix missing locations
         ast.fix_missing_locations(module)
@@ -318,12 +318,12 @@ def normalize_ast(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
     return normalized_code_with_docstring, normalized_code_without_docstring, docstring, reverse_mapping, alias_mapping
 
 
-def compute_hash(code: str) -> str:
+def hash_compute(code: str) -> str:
     """Compute SHA256 hash of the code"""
     return hashlib.sha256(code.encode('utf-8')).hexdigest()
 
 
-def get_ouverture_directory() -> Path:
+def directory_get_ouverture() -> Path:
     """
     Get the ouverture directory from environment variable or default to '$HOME/.local/ouverture/'.
     Environment variable: OUVERTURE_DIRECTORY
@@ -336,11 +336,11 @@ def get_ouverture_directory() -> Path:
     return Path(home) / '.local' / 'ouverture'
 
 
-def save_function(hash_value: str, lang: str, normalized_code: str, docstring: str,
+def function_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
                   name_mapping: Dict[str, str], alias_mapping: Dict[str, str]):
     """Save the function to the ouverture objects directory"""
     # Create directory structure: OUVERTURE_DIR/objects/XX/
-    ouverture_dir = get_ouverture_directory()
+    ouverture_dir = directory_get_ouverture()
     objects_dir = ouverture_dir / 'objects'
     hash_dir = objects_dir / hash_value[:2]
     hash_dir.mkdir(parents=True, exist_ok=True)
@@ -375,7 +375,7 @@ def save_function(hash_value: str, lang: str, normalized_code: str, docstring: s
     print(f"Language: {lang}")
 
 
-def denormalize_code(normalized_code: str, name_mapping: Dict[str, str], alias_mapping: Dict[str, str]) -> str:
+def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_mapping: Dict[str, str]) -> str:
     """
     Denormalize code by applying reverse name mappings.
     name_mapping: maps normalized names (_ouverture_v_X) to original names
@@ -443,7 +443,7 @@ def denormalize_code(normalized_code: str, name_mapping: Dict[str, str], alias_m
     return ast.unparse(tree)
 
 
-def add_function(file_path_with_lang: str):
+def function_add(file_path_with_lang: str):
     """Add a function to the ouverture pool"""
     # Parse the path and language
     if '@' not in file_path_with_lang:
@@ -474,19 +474,19 @@ def add_function(file_path_with_lang: str):
 
     # Normalize the AST
     try:
-        normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping = normalize_ast(tree, lang)
+        normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping = ast_normalize(tree, lang)
     except Exception as e:
         print(f"Error: Failed to normalize AST: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Compute hash on code WITHOUT docstring (so same logic = same hash regardless of language)
-    hash_value = compute_hash(normalized_code_without_docstring)
+    hash_value = hash_compute(normalized_code_without_docstring)
 
     # Save to JSON (store the version WITH docstring for display purposes)
-    save_function(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping)
+    function_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping)
 
 
-def replace_docstring(code: str, new_docstring: str) -> str:
+def docstring_replace(code: str, new_docstring: str) -> str:
     """
     Replace the docstring in a function with a new one.
     If new_docstring is empty, remove the docstring.
@@ -527,13 +527,13 @@ def replace_docstring(code: str, new_docstring: str) -> str:
     return ast.unparse(tree)
 
 
-def load_function(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
+def function_load(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
     """
     Load a function from the ouverture pool.
     Returns (normalized_code, name_mapping, alias_mapping, docstring)
     """
     # Build file path using configurable ouverture directory
-    ouverture_dir = get_ouverture_directory()
+    ouverture_dir = directory_get_ouverture()
     objects_dir = ouverture_dir / 'objects'
     hash_dir = objects_dir / hash_value[:2]
     json_path = hash_dir / f'{hash_value[2:]}.json'
@@ -567,7 +567,7 @@ def load_function(hash_value: str, lang: str) -> Tuple[str, Dict[str, str], Dict
     return normalized_code, name_mapping, alias_mapping, docstring
 
 
-def get_function(hash_with_lang: str):
+def function_get(hash_with_lang: str):
     """Get a function from the ouverture pool"""
     # Parse the hash and language
     if '@' not in hash_with_lang:
@@ -587,18 +587,18 @@ def get_function(hash_with_lang: str):
         sys.exit(1)
 
     # Load function data from pool
-    normalized_code, name_mapping, alias_mapping, docstring = load_function(hash_value, lang)
+    normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang)
 
     # Replace the docstring with the language-specific one
     try:
-        normalized_code = replace_docstring(normalized_code, docstring)
+        normalized_code = docstring_replace(normalized_code, docstring)
     except Exception as e:
         print(f"Error: Failed to replace docstring: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Denormalize the code
     try:
-        original_code = denormalize_code(normalized_code, name_mapping, alias_mapping)
+        original_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
     except Exception as e:
         print(f"Error: Failed to denormalize code: {e}", file=sys.stderr)
         sys.exit(1)
@@ -622,9 +622,9 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'add':
-        add_function(args.file)
+        function_add(args.file)
     elif args.command == 'get':
-        get_function(args.hash)
+        function_get(args.hash)
     else:
         parser.print_help()
 

@@ -71,7 +71,7 @@ hello-claude/
 
 ### Core Functions
 
-#### `normalize_ast(tree, lang)` (lines 272-318)
+#### `ast_normalize(tree, lang)` (lines 272-318)
 **Central normalization pipeline**
 - Sorts imports lexicographically
 - Extracts function definition and imports
@@ -80,36 +80,36 @@ hello-claude/
 - Creates name mappings (`original → _ouverture_v_X`)
 - Returns: normalized code (with/without docstring), docstring, mappings
 
-#### `create_name_mapping(function_def, imports, ouverture_aliases)` (lines 133-180)
+#### `mapping_create_name(function_def, imports, ouverture_aliases)` (lines 133-180)
 **Generates bidirectional name mappings**
 - Function name always gets `_ouverture_v_0`
 - Variables/args get sequential indices: `_ouverture_v_1`, `_ouverture_v_2`, ...
 - **Excluded from renaming**: Python builtins, imported names, ouverture aliases
 - Returns: `(forward_mapping, reverse_mapping)`
 
-#### `rewrite_ouverture_imports(imports)` (lines 183-213)
+#### `imports_rewrite_ouverture(imports)` (lines 183-213)
 **Transforms ouverture imports for normalization**
 - Rewrites: `from ouverture.pool import HASH as alias` → `from ouverture.pool import HASH` (removes alias)
 - Tracks alias mappings for later denormalization
 - Necessary because normalized code uses `HASH._ouverture_v_0(...)` instead of `alias(...)`
 
-#### `replace_ouverture_calls(tree, alias_mapping, name_mapping)` (lines 216-235)
+#### `calls_replace_ouverture(tree, alias_mapping, name_mapping)` (lines 216-235)
 **Replaces aliased function calls with normalized form**
 - Transforms: `alias(...)` → `HASH._ouverture_v_0(...)`
 - Uses alias_mapping to determine which names are ouverture functions
 
-#### `compute_hash(code)` (lines 321-323)
+#### `hash_compute(code)` (lines 321-323)
 **Generates SHA256 hash**
 - CRITICAL: Hash computed on code **WITHOUT docstring**
 - Ensures same logic = same hash across languages
 
-#### `save_function(hash_value, lang, ...)` (lines 326-362)
+#### `function_save(hash_value, lang, ...)` (lines 326-362)
 **Stores function in content-addressed pool**
 - Path: `.ouverture/objects/XX/YYYYYY.json` (XX = first 2 chars of hash)
 - Merges with existing data if hash already exists
 - Stores per-language: docstrings, name_mappings, alias_mappings
 
-#### `denormalize_code(normalized_code, name_mapping, alias_mapping)` (lines 364-429)
+#### `code_denormalize(normalized_code, name_mapping, alias_mapping)` (lines 364-429)
 **Reconstructs original-looking code**
 - Reverses variable renaming: `_ouverture_v_X → original_name`
 - Rewrites imports: `from ouverture.pool import X` → `from ouverture.pool import X as alias` (restores alias)
@@ -144,7 +144,7 @@ python3 ouverture.py get HASH@lang
 ### Naming Conventions
 
 - **Classes**: PascalCase (`ASTNormalizer`)
-- **Functions**: snake_case (`create_name_mapping`)
+- **Functions**: snake_case following `type_name_verb_complement` pattern (`mapping_create_name`, `ast_normalize`, `function_save`)
 - **Constants**: UPPER_SNAKE_CASE (`PYTHON_BUILTINS`)
 - **Normalized names**: `_ouverture_v_N` (N = 0, 1, 2, ...)
 
@@ -377,8 +377,8 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 
 1. **New commands**: Add to `argparse` subparsers in `main()` (lines 584-603)
 2. **New normalizations**: Extend `ASTNormalizer` class
-3. **New validations**: Add to `normalize_ast()` or command handlers
-4. **New storage formats**: Modify `save_function()` and increment version field
+3. **New validations**: Add to `ast_normalize()` or command handlers
+4. **New storage formats**: Modify `function_save()` and increment version field
 
 ### Future Considerations
 
@@ -392,10 +392,10 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 
 When referencing code locations, use this format:
 
-- `ouverture.py:272` - normalize_ast function
-- `ouverture.py:133` - create_name_mapping function
+- `ouverture.py:272` - ast_normalize function
+- `ouverture.py:133` - mapping_create_name function
 - `ouverture.py:20` - ASTNormalizer class
-- `ouverture.py:321` - compute_hash function
+- `ouverture.py:321` - hash_compute function
 
 ## Performance Considerations
 

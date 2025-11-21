@@ -19,13 +19,13 @@ import ouverture
 @pytest.fixture
 def mock_ouverture_dir(tmp_path, monkeypatch):
     """
-    Fixture to monkey patch get_ouverture_directory to return a temp directory.
+    Fixture to monkey patch directory_get_ouverture to return a temp directory.
     This ensures tests work with pytest-xdist (parallel test runner).
     """
     def _get_temp_ouverture_dir():
         return tmp_path / '.ouverture'
 
-    monkeypatch.setattr(ouverture, 'get_ouverture_directory', _get_temp_ouverture_dir)
+    monkeypatch.setattr(ouverture, 'directory_get_ouverture', _get_temp_ouverture_dir)
     return tmp_path
 
 
@@ -93,7 +93,7 @@ def test_collect_names_simple_names():
     """Test collecting variable names"""
     code = "x = 1\ny = 2\nz = x + y"
     tree = ast.parse(code)
-    names = ouverture.collect_names(tree)
+    names = ouverture.names_collect(tree)
 
     assert "x" in names
     assert "y" in names
@@ -104,7 +104,7 @@ def test_collect_names_function_names():
     """Test collecting function names and arguments"""
     code = "def foo(a, b): return a + b"
     tree = ast.parse(code)
-    names = ouverture.collect_names(tree)
+    names = ouverture.names_collect(tree)
 
     assert "foo" in names
     assert "a" in names
@@ -114,7 +114,7 @@ def test_collect_names_function_names():
 def test_collect_names_empty_tree():
     """Test collecting names from empty module"""
     tree = ast.parse("")
-    names = ouverture.collect_names(tree)
+    names = ouverture.names_collect(tree)
 
     assert len(names) == 0
 
@@ -125,7 +125,7 @@ def test_get_imported_names_import_statement():
     """Test extracting names from import statement"""
     code = "import math"
     tree = ast.parse(code)
-    names = ouverture.get_imported_names(tree)
+    names = ouverture.imports_get_names(tree)
 
     assert "math" in names
 
@@ -134,7 +134,7 @@ def test_get_imported_names_import_with_alias():
     """Test extracting aliased import names"""
     code = "import numpy as np"
     tree = ast.parse(code)
-    names = ouverture.get_imported_names(tree)
+    names = ouverture.imports_get_names(tree)
 
     assert "np" in names
     assert "numpy" not in names
@@ -144,7 +144,7 @@ def test_get_imported_names_from_import():
     """Test extracting names from from-import"""
     code = "from collections import Counter"
     tree = ast.parse(code)
-    names = ouverture.get_imported_names(tree)
+    names = ouverture.imports_get_names(tree)
 
     assert "Counter" in names
 
@@ -153,7 +153,7 @@ def test_get_imported_names_from_import_with_alias():
     """Test extracting aliased from-import names"""
     code = "from collections import Counter as C"
     tree = ast.parse(code)
-    names = ouverture.get_imported_names(tree)
+    names = ouverture.imports_get_names(tree)
 
     assert "C" in names
     assert "Counter" not in names
@@ -167,7 +167,7 @@ from collections import Counter
 import numpy as np
 """
     tree = ast.parse(code)
-    names = ouverture.get_imported_names(tree)
+    names = ouverture.imports_get_names(tree)
 
     assert "math" in names
     assert "Counter" in names
@@ -184,10 +184,10 @@ def foo():
     return math.sqrt(4)
 """
     tree = ast.parse(code)
-    imported = ouverture.get_imported_names(tree)
-    all_names = ouverture.collect_names(tree)
+    imported = ouverture.imports_get_names(tree)
+    all_names = ouverture.names_collect(tree)
 
-    result = ouverture.check_unused_imports(tree, imported, all_names)
+    result = ouverture.imports_check_unused(tree, imported, all_names)
     assert result is True
 
 
@@ -199,10 +199,10 @@ def foo():
     return 4
 """
     tree = ast.parse(code)
-    imported = ouverture.get_imported_names(tree)
-    all_names = ouverture.collect_names(tree)
+    imported = ouverture.imports_get_names(tree)
+    all_names = ouverture.names_collect(tree)
 
-    result = ouverture.check_unused_imports(tree, imported, all_names)
+    result = ouverture.imports_check_unused(tree, imported, all_names)
     assert result is False
 
 
@@ -216,7 +216,7 @@ import ast
 import os
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.sort_imports(tree)
+    sorted_tree = ouverture.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # ast should come before os, os before sys
@@ -232,7 +232,7 @@ from collections import Counter
 from ast import parse
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.sort_imports(tree)
+    sorted_tree = ouverture.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # Should be sorted by module name
@@ -249,7 +249,7 @@ def foo():
 import os
 """
     tree = ast.parse(code)
-    sorted_tree = ouverture.sort_imports(tree)
+    sorted_tree = ouverture.imports_sort(tree)
     result = ast.unparse(sorted_tree)
 
     # All imports should come before the function
@@ -266,7 +266,7 @@ def foo():
     return 42
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
     assert func_def is not None
     assert func_def.name == "foo"
@@ -283,7 +283,7 @@ def process():
     return 42
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
     assert func_def is not None
     assert func_def.name == "process"
@@ -296,7 +296,7 @@ def test_extract_function_def_no_function_raises_error():
     tree = ast.parse(code)
 
     with pytest.raises(ValueError, match="No function definition found"):
-        ouverture.extract_function_def(tree)
+        ouverture.function_extract_definition(tree)
 
 
 def test_extract_function_def_multiple_functions_raises_error():
@@ -311,7 +311,7 @@ def bar():
     tree = ast.parse(code)
 
     with pytest.raises(ValueError, match="Only one function definition is allowed"):
-        ouverture.extract_function_def(tree)
+        ouverture.function_extract_definition(tree)
 
 
 # Tests for create_name_mapping function
@@ -320,9 +320,9 @@ def test_create_name_mapping_function_name_always_v0():
     """Test that function name always maps to _ouverture_v_0"""
     code = "def my_function(x): return x"
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
-    forward, reverse = ouverture.create_name_mapping(func_def, imports)
+    forward, reverse = ouverture.mapping_create_name(func_def, imports)
 
     assert forward["my_function"] == "_ouverture_v_0"
     assert reverse["_ouverture_v_0"] == "my_function"
@@ -336,9 +336,9 @@ def foo(a, b):
     return c
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
-    forward, reverse = ouverture.create_name_mapping(func_def, imports)
+    forward, reverse = ouverture.mapping_create_name(func_def, imports)
 
     # foo should be v_0
     assert forward["foo"] == "_ouverture_v_0"
@@ -353,9 +353,9 @@ def foo(items):
     return len(items)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
-    forward, reverse = ouverture.create_name_mapping(func_def, imports)
+    forward, reverse = ouverture.mapping_create_name(func_def, imports)
 
     # len is a built-in and should not be in the mapping
     assert "len" not in forward
@@ -371,9 +371,9 @@ def foo(x):
     return math.sqrt(x)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
-    forward, reverse = ouverture.create_name_mapping(func_def, imports)
+    forward, reverse = ouverture.mapping_create_name(func_def, imports)
 
     # math is imported and should not be renamed
     assert "math" not in forward
@@ -387,11 +387,11 @@ def foo(x):
     return helper(x)
 """
     tree = ast.parse(code)
-    func_def, imports = ouverture.extract_function_def(tree)
+    func_def, imports = ouverture.function_extract_definition(tree)
 
     # Simulate that 'helper' is an ouverture alias
     ouverture_aliases = {"helper"}
-    forward, reverse = ouverture.create_name_mapping(func_def, imports, ouverture_aliases)
+    forward, reverse = ouverture.mapping_create_name(func_def, imports, ouverture_aliases)
 
     # helper should not be renamed
     assert "helper" not in forward
@@ -406,7 +406,7 @@ def test_rewrite_ouverture_imports_with_alias():
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
+    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
 
     # Should remove alias but keep ouverture.pool module name
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
@@ -423,7 +423,7 @@ def test_rewrite_ouverture_imports_without_alias():
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
+    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
     assert "from ouverture.pool import abc123" in result
@@ -436,7 +436,7 @@ def test_rewrite_ouverture_imports_non_ouverture_imports_unchanged():
     tree = ast.parse(code)
     imports = tree.body
 
-    new_imports, alias_mapping = ouverture.rewrite_ouverture_imports(imports)
+    new_imports, alias_mapping = ouverture.imports_rewrite_ouverture(imports)
 
     result = ast.unparse(ast.Module(body=new_imports, type_ignores=[]))
     assert "import math" in result
@@ -456,7 +456,7 @@ def foo(x):
     alias_mapping = {"abc123": "helper"}
     name_mapping = {}
 
-    new_tree = ouverture.replace_ouverture_calls(tree, alias_mapping, name_mapping)
+    new_tree = ouverture.calls_replace_ouverture(tree, alias_mapping, name_mapping)
     result = ast.unparse(new_tree)
 
     # helper(x) should become abc123._ouverture_v_0(x)
@@ -474,7 +474,7 @@ def foo(x):
     alias_mapping = {"abc123": "helper"}
     name_mapping = {}
 
-    new_tree = ouverture.replace_ouverture_calls(tree, alias_mapping, name_mapping)
+    new_tree = ouverture.calls_replace_ouverture(tree, alias_mapping, name_mapping)
     result = ast.unparse(new_tree)
 
     # other should remain unchanged
@@ -494,7 +494,7 @@ def test_clear_locations_all_location_info():
             assert node.lineno is not None
             break
 
-    ouverture.clear_locations(tree)
+    ouverture.ast_clear_locations(tree)
 
     # Verify all locations are None
     for node in ast.walk(tree):
@@ -514,9 +514,9 @@ def foo():
     return 42
 '''
     tree = ast.parse(code)
-    func_def, _ = ouverture.extract_function_def(tree)
+    func_def, _ = ouverture.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.extract_docstring(func_def)
+    docstring, func_without_doc = ouverture.docstring_extract(func_def)
 
     assert docstring == "This is a docstring"
     assert len(func_without_doc.body) == 1  # Only return statement
@@ -530,9 +530,9 @@ def foo():
     return 42
 """
     tree = ast.parse(code)
-    func_def, _ = ouverture.extract_function_def(tree)
+    func_def, _ = ouverture.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.extract_docstring(func_def)
+    docstring, func_without_doc = ouverture.docstring_extract(func_def)
 
     assert docstring == ""
     assert len(func_without_doc.body) == 1
@@ -549,9 +549,9 @@ def foo():
     return 42
 '''
     tree = ast.parse(code)
-    func_def, _ = ouverture.extract_function_def(tree)
+    func_def, _ = ouverture.function_extract_definition(tree)
 
-    docstring, func_without_doc = ouverture.extract_docstring(func_def)
+    docstring, func_without_doc = ouverture.docstring_extract(func_def)
 
     assert "multiline" in docstring
     assert "docstring" in docstring
@@ -570,7 +570,7 @@ def calculate_sum(first, second):
     tree = ast.parse(code)
 
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
-        ouverture.normalize_ast(tree, "eng")
+        ouverture.ast_normalize(tree, "eng")
 
     assert "_ouverture_v_0" in code_with_doc  # Function name normalized
     assert docstring == "Add two numbers"
@@ -590,7 +590,7 @@ def foo():
 """
     tree = ast.parse(code)
 
-    code_with_doc, _, _, _, _ = ouverture.normalize_ast(tree, "eng")
+    code_with_doc, _, _, _, _ = ouverture.ast_normalize(tree, "eng")
 
     # Verify imports are sorted
     assert code_with_doc.index("import ast") < code_with_doc.index("import os")
@@ -609,7 +609,7 @@ def foo(x):
     tree = ast.parse(code)
 
     code_with_doc, code_without_doc, docstring, name_mapping, alias_mapping = \
-        ouverture.normalize_ast(tree, "eng")
+        ouverture.ast_normalize(tree, "eng")
 
     # Should remove alias but keep ouverture.pool module name
     assert "from ouverture.pool import abc123" in code_with_doc
@@ -628,8 +628,8 @@ def test_compute_hash_deterministic():
     """Test that same input produces same hash"""
     code = "def foo(): return 42"
 
-    hash1 = ouverture.compute_hash(code)
-    hash2 = ouverture.compute_hash(code)
+    hash1 = ouverture.hash_compute(code)
+    hash2 = ouverture.hash_compute(code)
 
     assert hash1 == hash2
 
@@ -638,7 +638,7 @@ def test_compute_hash_format():
     """Test that hash is 64 hex characters"""
     code = "def foo(): return 42"
 
-    hash_value = ouverture.compute_hash(code)
+    hash_value = ouverture.hash_compute(code)
 
     assert len(hash_value) == 64
     assert all(c in '0123456789abcdef' for c in hash_value)
@@ -649,8 +649,8 @@ def test_compute_hash_different_code_different_hash():
     code1 = "def foo(): return 42"
     code2 = "def bar(): return 43"
 
-    hash1 = ouverture.compute_hash(code1)
-    hash2 = ouverture.compute_hash(code2)
+    hash1 = ouverture.hash_compute(code1)
+    hash2 = ouverture.hash_compute(code2)
 
     assert hash1 != hash2
 
@@ -668,7 +668,7 @@ def test_save_function_new_function(mock_ouverture_dir):
 
     # Capture stdout
     with patch('sys.stdout'):
-        ouverture.save_function(hash_value, lang, normalized_code,
+        ouverture.function_save(hash_value, lang, normalized_code,
                                docstring, name_mapping, alias_mapping)
 
     # Verify file was created
@@ -692,12 +692,12 @@ def test_save_function_additional_language(mock_ouverture_dir):
 
     # Save English version
     with patch('sys.stdout'):
-        ouverture.save_function(hash_value, "eng", normalized_code,
+        ouverture.function_save(hash_value, "eng", normalized_code,
                                "English doc", {"_ouverture_v_0": "foo"}, {})
 
     # Save French version
     with patch('sys.stdout'):
-        ouverture.save_function(hash_value, "fra", normalized_code,
+        ouverture.function_save(hash_value, "fra", normalized_code,
                                "French doc", {"_ouverture_v_0": "foo"}, {})
 
     # Verify both languages are present
@@ -722,7 +722,7 @@ def foo():
 '''
     new_doc = "New docstring"
 
-    result = ouverture.replace_docstring(code, new_doc)
+    result = ouverture.docstring_replace(code, new_doc)
 
     assert "New docstring" in result
     assert "Old docstring" not in result
@@ -736,7 +736,7 @@ def foo():
 """
     new_doc = "Added docstring"
 
-    result = ouverture.replace_docstring(code, new_doc)
+    result = ouverture.docstring_replace(code, new_doc)
 
     assert "Added docstring" in result
 
@@ -748,7 +748,7 @@ def foo():
     """Remove this"""
     return 42
 '''
-    result = ouverture.replace_docstring(code, "")
+    result = ouverture.docstring_replace(code, "")
 
     assert "Remove this" not in result
     tree = ast.parse(result)
@@ -776,7 +776,7 @@ def _ouverture_v_0(_ouverture_v_1, _ouverture_v_2):
     }
     alias_mapping = {}
 
-    result = ouverture.denormalize_code(normalized, name_mapping, alias_mapping)
+    result = ouverture.code_denormalize(normalized, name_mapping, alias_mapping)
 
     assert "calculate" in result
     assert "first" in result
@@ -801,7 +801,7 @@ def _ouverture_v_0(_ouverture_v_1):
         "abc123": "helper"
     }
 
-    result = ouverture.denormalize_code(normalized, name_mapping, alias_mapping)
+    result = ouverture.code_denormalize(normalized, name_mapping, alias_mapping)
 
     # Should restore import with alias
     assert "from ouverture.pool import abc123 as helper" in result
@@ -817,21 +817,21 @@ def test_add_function_missing_lang_suffix():
     """Test that missing @lang suffix causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.add_function("example.py")
+            ouverture.function_add("example.py")
 
 
 def test_add_function_invalid_lang_code():
     """Test that invalid language code causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.add_function("example.py@en")  # Should be 3 chars
+            ouverture.function_add("example.py@en")  # Should be 3 chars
 
 
 def test_add_function_file_not_found():
     """Test that missing file causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.add_function("nonexistent.py@eng")
+            ouverture.function_add("nonexistent.py@eng")
 
 
 def test_add_function_syntax_error(tmp_path):
@@ -841,7 +841,7 @@ def test_add_function_syntax_error(tmp_path):
 
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.add_function(f"{test_file}@eng")
+            ouverture.function_add(f"{test_file}@eng")
 
 
 def test_add_function_success(mock_ouverture_dir):
@@ -854,7 +854,7 @@ def calculate_sum(a, b):
 ''', encoding='utf-8')
 
     with patch('sys.stdout'):
-        ouverture.add_function(f"{test_file}@eng")
+        ouverture.function_add(f"{test_file}@eng")
 
     # Verify .ouverture directory was created
     ouverture_objects = mock_ouverture_dir / '.ouverture/objects'
@@ -871,21 +871,21 @@ def test_get_function_missing_lang_suffix():
     """Test that missing @lang suffix causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.get_function("abc123")
+            ouverture.function_get("abc123")
 
 
 def test_get_function_invalid_lang_code():
     """Test that invalid language code causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.get_function("abc123@en")  # Should be 3 chars
+            ouverture.function_get("abc123@en")  # Should be 3 chars
 
 
 def test_get_function_invalid_hash_format():
     """Test that invalid hash format causes error"""
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.get_function("notahash@eng")
+            ouverture.function_get("notahash@eng")
 
 
 def test_get_function_not_found():
@@ -893,7 +893,7 @@ def test_get_function_not_found():
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
             hash_value = "a" * 64
-            ouverture.get_function(f"{hash_value}@eng")
+            ouverture.function_get(f"{hash_value}@eng")
 
 
 def test_get_function_language_not_found(mock_ouverture_dir):
@@ -901,7 +901,7 @@ def test_get_function_language_not_found(mock_ouverture_dir):
     # Create a function with only English
     hash_value = "c" * 64
     with patch('sys.stdout'):
-        ouverture.save_function(hash_value, "eng",
+        ouverture.function_save(hash_value, "eng",
                                "def _ouverture_v_0(): return 42",
                                "English doc",
                                {"_ouverture_v_0": "foo"}, {})
@@ -909,7 +909,7 @@ def test_get_function_language_not_found(mock_ouverture_dir):
     # Try to get it in French
     with pytest.raises(SystemExit):
         with patch('sys.stderr'):
-            ouverture.get_function(f"{hash_value}@fra")
+            ouverture.function_get(f"{hash_value}@fra")
 
 
 def test_get_function_success(mock_ouverture_dir):
@@ -929,12 +929,12 @@ def _ouverture_v_0(_ouverture_v_1, _ouverture_v_2):
     }
 
     with patch('sys.stdout'):
-        ouverture.save_function(hash_value, "eng", normalized_code,
+        ouverture.function_save(hash_value, "eng", normalized_code,
                                "Add two numbers", name_mapping, {})
 
     # Retrieve it
     with patch('sys.stdout') as mock_stdout:
-        ouverture.get_function(f"{hash_value}@eng")
+        ouverture.function_get(f"{hash_value}@eng")
 
         # Verify it was printed (can't easily capture print output)
         # Just verify no exception was raised
@@ -956,7 +956,7 @@ def test_end_to_end_roundtrip_simple_function(mock_ouverture_dir):
     hash_value = None
     with patch('sys.stdout') as mock_stdout:
         with patch('builtins.print') as mock_print:
-            ouverture.add_function(f"{test_file}@eng")
+            ouverture.function_add(f"{test_file}@eng")
             # Extract hash from print calls
             for call in mock_print.call_args_list:
                 args = str(call)
@@ -968,7 +968,7 @@ def test_end_to_end_roundtrip_simple_function(mock_ouverture_dir):
     # Get function back
     output = []
     with patch('builtins.print', side_effect=lambda x: output.append(x)):
-        ouverture.get_function(f"{hash_value}@eng")
+        ouverture.function_get(f"{hash_value}@eng")
 
     retrieved_code = '\n'.join(output)
 
@@ -1005,14 +1005,14 @@ def test_end_to_end_multilingual_same_hash(mock_ouverture_dir):
     fra_hash = None
 
     with patch('builtins.print') as mock_print:
-        ouverture.add_function(f"{eng_file}@eng")
+        ouverture.function_add(f"{eng_file}@eng")
         for call in mock_print.call_args_list:
             args = str(call)
             if 'Hash:' in args:
                 eng_hash = args.split('Hash: ')[1].split("'")[0]
 
     with patch('builtins.print') as mock_print:
-        ouverture.add_function(f"{fra_file}@fra")
+        ouverture.function_add(f"{fra_file}@fra")
         for call in mock_print.call_args_list:
             args = str(call)
             if 'Hash:' in args:
@@ -1023,5 +1023,5 @@ def test_end_to_end_multilingual_same_hash(mock_ouverture_dir):
 
     # Should be able to retrieve in both languages
     with patch('builtins.print'):
-        ouverture.get_function(f"{eng_hash}@eng")
-        ouverture.get_function(f"{fra_hash}@fra")
+        ouverture.function_get(f"{eng_hash}@eng")
+        ouverture.function_get(f"{fra_hash}@fra")
