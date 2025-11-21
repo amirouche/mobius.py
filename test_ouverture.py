@@ -1025,3 +1025,177 @@ def test_end_to_end_multilingual_same_hash(mock_ouverture_dir):
     with patch('builtins.print'):
         ouverture.function_get(f"{eng_hash}@eng")
         ouverture.function_get(f"{fra_hash}@fra")
+
+
+# ============================================================================
+# Tests for Phase 1: Foundation (Schema v1)
+# ============================================================================
+
+def test_mapping_compute_hash_deterministic():
+    """Test that mapping_compute_hash produces deterministic hashes"""
+    docstring = "Calculate the average"
+    name_mapping = {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"}
+    alias_mapping = {"abc123": "helper"}
+    comment = "Formal terminology"
+
+    # Compute hash twice - should be identical
+    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+
+    assert hash1 == hash2
+    assert len(hash1) == 64  # SHA256 produces 64 hex characters
+    assert all(c in '0123456789abcdef' for c in hash1)
+
+
+def test_mapping_compute_hash_different_comments():
+    """Test that different comments produce different hashes"""
+    docstring = "Calculate the average"
+    name_mapping = {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"}
+    alias_mapping = {"abc123": "helper"}
+
+    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Formal")
+    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "Informal")
+
+    assert hash1 != hash2
+
+
+def test_mapping_compute_hash_empty_comment():
+    """Test that mapping hash works with empty comment"""
+    docstring = "Calculate the average"
+    name_mapping = {"_ouverture_v_0": "calculate_average"}
+    alias_mapping = {}
+
+    hash_val = ouverture.mapping_compute_hash(docstring, name_mapping, alias_mapping, "")
+
+    assert len(hash_val) == 64
+    assert all(c in '0123456789abcdef' for c in hash_val)
+
+
+def test_mapping_compute_hash_canonical_json():
+    """Test that mapping hash is based on canonical JSON (order-independent)"""
+    docstring = "Test"
+    # Different key orders should produce same hash
+    name_mapping1 = {"_ouverture_v_0": "foo", "_ouverture_v_1": "bar"}
+    name_mapping2 = {"_ouverture_v_1": "bar", "_ouverture_v_0": "foo"}
+    alias_mapping = {}
+
+    hash1 = ouverture.mapping_compute_hash(docstring, name_mapping1, alias_mapping, "")
+    hash2 = ouverture.mapping_compute_hash(docstring, name_mapping2, alias_mapping, "")
+
+    assert hash1 == hash2
+
+
+def test_schema_detect_version_v0(mock_ouverture_dir):
+    """Test that schema_detect_version correctly identifies v0 format"""
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    test_hash = "abcd1234" + "0" * 56
+
+    # Create v0 format: XX/YYYYYY.json
+    hash_dir = objects_dir / test_hash[:2]
+    hash_dir.mkdir(parents=True, exist_ok=True)
+    json_path = hash_dir / f'{test_hash[2:]}.json'
+
+    v0_data = {
+        'version': 0,
+        'hash': test_hash,
+        'normalized_code': 'def _ouverture_v_0(): pass',
+        'docstrings': {},
+        'name_mappings': {},
+        'alias_mappings': {}
+    }
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(v0_data, f)
+
+    version = ouverture.schema_detect_version(test_hash)
+    assert version == 0
+
+
+def test_schema_detect_version_v1(mock_ouverture_dir):
+    """Test that schema_detect_version correctly identifies v1 format"""
+    ouverture_dir = mock_ouverture_dir / '.ouverture'
+    objects_dir = ouverture_dir / 'objects'
+    test_hash = "abcd1234" + "0" * 56
+
+    # Create v1 format: XX/YYYYYY.../object.json
+    func_dir = objects_dir / test_hash[:2] / test_hash[2:]
+    func_dir.mkdir(parents=True, exist_ok=True)
+    object_json = func_dir / 'object.json'
+
+    v1_data = {
+        'schema_version': 1,
+        'hash': test_hash,
+        'hash_algorithm': 'sha256',
+        'normalized_code': 'def _ouverture_v_0(): pass',
+        'encoding': 'none',
+        'metadata': {}
+    }
+
+    with open(object_json, 'w', encoding='utf-8') as f:
+        json.dump(v1_data, f)
+
+    version = ouverture.schema_detect_version(test_hash)
+    assert version == 1
+
+
+def test_schema_detect_version_not_found(mock_ouverture_dir):
+    """Test that schema_detect_version returns None for non-existent function"""
+    test_hash = "nonexistent" + "0" * 54
+
+    version = ouverture.schema_detect_version(test_hash)
+    assert version is None
+
+
+def test_metadata_create_basic():
+    """Test that metadata_create generates proper metadata structure"""
+    metadata = ouverture.metadata_create()
+
+    assert 'created' in metadata
+    assert 'author' in metadata
+    assert 'tags' in metadata
+    assert 'dependencies' in metadata
+
+    assert isinstance(metadata['tags'], list)
+    assert isinstance(metadata['dependencies'], list)
+    assert len(metadata['tags']) == 0
+    assert len(metadata['dependencies']) == 0
+
+
+def test_metadata_create_with_author():
+    """Test that metadata_create uses author from environment"""
+    with patch.dict(os.environ, {'USER': 'testuser'}):
+        metadata = ouverture.metadata_create()
+        assert metadata['author'] == 'testuser'
+
+
+def test_metadata_create_timestamp_format():
+    """Test that metadata_create uses ISO 8601 timestamp format"""
+    metadata = ouverture.metadata_create()
+    created = metadata['created']
+
+    # Should be ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ
+    assert 'T' in created
+    assert len(created) >= 19  # At minimum: 2025-01-01T00:00:00
+
+
+def test_hash_compute_with_algorithm_parameter():
+    """Test that hash_compute works with algorithm parameter"""
+    code = "def foo(): pass"
+
+    # Default should be sha256
+    hash_default = ouverture.hash_compute(code)
+    hash_sha256 = ouverture.hash_compute(code, algorithm='sha256')
+
+    assert hash_default == hash_sha256
+    assert len(hash_default) == 64
+
+
+def test_hash_compute_algorithm_deterministic():
+    """Test that hash_compute with algorithm produces deterministic results"""
+    code = "def foo(): pass"
+
+    hash1 = ouverture.hash_compute(code, algorithm='sha256')
+    hash2 = ouverture.hash_compute(code, algorithm='sha256')
+
+    assert hash1 == hash2
