@@ -4,7 +4,9 @@
 
 **Beyond Babel, all around the world Python functions**
 
-Write functions in your language. Share logic universally. Ouverture is a function pool where the same code written in different human languages produces the same hash.
+Write functions in your language. Share logic universally. Ouverture creates bridges through shared logic—not by erasing differences, but by recognizing equivalence where it naturally emerges.
+
+Ouverture is a function pool where the same code written in different human languages produces the same hash.
 
 ## The Idea
 
