@@ -8,6 +8,7 @@ import builtins
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, Set, Tuple, List, Union
@@ -868,13 +869,217 @@ def code_denormalize(normalized_code: str, name_mapping: Dict[str, str], alias_m
     return ast.unparse(tree)
 
 
+# =============================================================================
+# Git Remote Functions
+# =============================================================================
+
+def git_run(args: List[str], cwd: str = None, timeout: int = 60) -> subprocess.CompletedProcess:
+    """
+    Execute a git command via subprocess.run().
+
+    Args:
+        args: List of arguments to pass to git (without 'git' prefix)
+        cwd: Working directory for the command
+        timeout: Timeout in seconds (default 60)
+
+    Returns:
+        subprocess.CompletedProcess with stdout/stderr captured
+
+    Raises:
+        subprocess.CalledProcessError: If git command fails
+        subprocess.TimeoutExpired: If command times out
+    """
+    cmd = ['git'] + args
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout
+    )
+    return result
+
+
+def git_url_parse(url: str) -> Dict[str, str]:
+    """
+    Parse a Git URL into components.
+
+    Supports formats:
+    - git@host:user/repo.git (SSH)
+    - git+https://host/user/repo.git (HTTPS)
+    - git+file:///path/to/repo (Local file)
+
+    Args:
+        url: Git URL to parse
+
+    Returns:
+        Dictionary with keys: protocol, host, path, original_url
+        protocol: 'ssh', 'https', or 'file'
+    """
+    result = {'original_url': url}
+
+    if url.startswith('git@'):
+        # SSH format: git@host:user/repo.git
+        result['protocol'] = 'ssh'
+        # Split on : to get host and path
+        parts = url[4:].split(':', 1)
+        result['host'] = parts[0]
+        result['path'] = parts[1] if len(parts) > 1 else ''
+        result['git_url'] = url  # Already in git format
+
+    elif url.startswith('git+https://'):
+        # HTTPS format: git+https://host/path/repo.git
+        result['protocol'] = 'https'
+        # Remove git+ prefix for actual git URL
+        actual_url = url[4:]  # Remove 'git+' prefix
+        from urllib.parse import urlparse
+        parsed = urlparse(actual_url)
+        result['host'] = parsed.netloc
+        result['path'] = parsed.path.lstrip('/')
+        result['git_url'] = actual_url
+
+    elif url.startswith('git+file://'):
+        # Local file format: git+file:///path/to/repo
+        result['protocol'] = 'file'
+        result['host'] = ''
+        result['path'] = url[11:]  # Remove 'git+file://' prefix
+        result['git_url'] = 'file://' + result['path']
+
+    else:
+        raise ValueError(f"Unsupported Git URL format: {url}")
+
+    return result
+
+
+def remote_type_detect(url: str) -> str:
+    """
+    Detect the type of remote from URL.
+
+    Args:
+        url: Remote URL
+
+    Returns:
+        Remote type: 'file', 'git-ssh', 'git-https', 'git-file', 'http', 'https'
+    """
+    if url.startswith('file://'):
+        return 'file'
+    elif url.startswith('git@'):
+        return 'git-ssh'
+    elif url.startswith('git+https://'):
+        return 'git-https'
+    elif url.startswith('git+file://'):
+        return 'git-file'
+    elif url.startswith('https://'):
+        return 'https'
+    elif url.startswith('http://'):
+        return 'http'
+    else:
+        return 'unknown'
+
+
+def git_cache_path(remote_name: str) -> Path:
+    """
+    Get the cache path for a Git remote repository.
+
+    Args:
+        remote_name: Name of the remote
+
+    Returns:
+        Path to the cached repository directory
+    """
+    ouverture_dir = directory_get_ouverture()
+    return ouverture_dir / 'cache' / 'git' / remote_name
+
+
+def git_clone_or_fetch(git_url: str, local_path: Path) -> bool:
+    """
+    Clone a Git repository if it doesn't exist, or fetch if it does.
+
+    Args:
+        git_url: Git URL (SSH, HTTPS, or file://)
+        local_path: Local path to clone/fetch to
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if local_path.exists() and (local_path / '.git').exists():
+        # Repository exists, fetch updates
+        result = git_run(['fetch', 'origin'], cwd=str(local_path))
+        if result.returncode != 0:
+            print(f"Warning: git fetch failed: {result.stderr}", file=sys.stderr)
+            return False
+
+        # Pull changes (fast-forward only)
+        result = git_run(['pull', '--ff-only', 'origin', 'main'], cwd=str(local_path))
+        if result.returncode != 0:
+            # Try 'master' branch if 'main' fails
+            result = git_run(['pull', '--ff-only', 'origin', 'master'], cwd=str(local_path))
+            if result.returncode != 0:
+                print(f"Warning: git pull failed: {result.stderr}", file=sys.stderr)
+                return False
+        return True
+    else:
+        # Clone repository
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        result = git_run(['clone', git_url, str(local_path)])
+        if result.returncode != 0:
+            print(f"Error: git clone failed: {result.stderr}", file=sys.stderr)
+            return False
+        return True
+
+
+def git_commit_and_push(local_path: Path, message: str) -> bool:
+    """
+    Stage all changes, commit, and push to remote.
+
+    Args:
+        local_path: Path to the Git repository
+        message: Commit message
+
+    Returns:
+        True if successful, False otherwise
+    """
+    cwd = str(local_path)
+
+    # Stage all changes
+    result = git_run(['add', '.'], cwd=cwd)
+    if result.returncode != 0:
+        print(f"Error: git add failed: {result.stderr}", file=sys.stderr)
+        return False
+
+    # Check if there are changes to commit
+    result = git_run(['diff', '--cached', '--quiet'], cwd=cwd)
+    if result.returncode == 0:
+        # No changes to commit
+        print("No changes to commit")
+        return True
+
+    # Commit changes
+    result = git_run(['commit', '-m', message], cwd=cwd)
+    if result.returncode != 0:
+        print(f"Error: git commit failed: {result.stderr}", file=sys.stderr)
+        return False
+
+    # Push to remote
+    result = git_run(['push', 'origin', 'HEAD'], cwd=cwd)
+    if result.returncode != 0:
+        print(f"Error: git push failed: {result.stderr}", file=sys.stderr)
+        return False
+
+    return True
+
+
 def command_remote_add(name: str, url: str):
     """
     Add a remote repository.
 
     Args:
         name: Remote name
-        url: Remote URL (HTTP/HTTPS or file://)
+        url: Remote URL. Supported formats:
+            - file:///path/to/pool (direct file copy)
+            - git@host:user/repo.git (Git SSH)
+            - git+https://host/user/repo.git (Git HTTPS)
+            - git+file:///path/to/repo (Local Git repository)
     """
     config = config_read()
 
@@ -882,17 +1087,25 @@ def command_remote_add(name: str, url: str):
         print(f"Error: Remote '{name}' already exists", file=sys.stderr)
         sys.exit(1)
 
-    # Validate URL format
-    if not (url.startswith('http://') or url.startswith('https://') or url.startswith('file://')):
-        print(f"Error: Invalid URL format. Must start with http://, https://, or file://", file=sys.stderr)
+    # Detect remote type
+    remote_type = remote_type_detect(url)
+
+    if remote_type == 'unknown':
+        print(f"Error: Invalid URL format: {url}", file=sys.stderr)
+        print("Supported formats:", file=sys.stderr)
+        print("  file:///path/to/pool          - Direct file copy", file=sys.stderr)
+        print("  git@host:user/repo.git        - Git SSH", file=sys.stderr)
+        print("  git+https://host/user/repo    - Git HTTPS", file=sys.stderr)
+        print("  git+file:///path/to/repo      - Local Git repository", file=sys.stderr)
         sys.exit(1)
 
     config['remotes'][name] = {
-        'url': url
+        'url': url,
+        'type': remote_type
     }
 
     config_write(config)
-    print(f"Added remote '{name}': {url}")
+    print(f"Added remote '{name}': {url} (type: {remote_type})")
 
 
 def command_remote_remove(name: str):
@@ -935,6 +1148,8 @@ def command_remote_pull(name: str):
     Args:
         name: Remote name to pull from
     """
+    import shutil
+
     config = config_read()
 
     if name not in config['remotes']:
@@ -943,17 +1158,13 @@ def command_remote_pull(name: str):
 
     remote = config['remotes'][name]
     url = remote['url']
+    remote_type = remote.get('type', remote_type_detect(url))
 
     print(f"Pulling from remote '{name}': {url}")
     print()
 
-    # TODO: Implement actual network operations
-    # For file:// URLs, we could copy from local filesystem
-    # For http:// and https:// URLs, we would need a server API
-
-    if url.startswith('file://'):
-        # Local file system remote
-        import shutil
+    if remote_type == 'file':
+        # Local file system remote (direct copy)
         remote_path = Path(url[7:])  # Remove file:// prefix
 
         if not remote_path.exists():
@@ -972,21 +1183,52 @@ def command_remote_pull(name: str):
         # Copy all objects
         pulled_count = 0
         for item in remote_objects.rglob('*.json'):
-            # Compute relative path
             rel_path = item.relative_to(remote_objects)
             local_item = local_objects / rel_path
 
-            # Only copy if doesn't exist locally
             if not local_item.exists():
                 local_item.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, local_item)
                 pulled_count += 1
 
         print(f"Pulled {pulled_count} new functions from '{name}'")
+
+    elif remote_type in ('git-ssh', 'git-https', 'git-file'):
+        # Git remote - clone/fetch then copy objects
+        parsed = git_url_parse(url)
+        cache_path = git_cache_path(name)
+
+        print(f"Syncing Git repository to {cache_path}...")
+        if not git_clone_or_fetch(parsed['git_url'], cache_path):
+            print("Error: Failed to sync Git repository", file=sys.stderr)
+            sys.exit(1)
+
+        # Copy functions from cached repository to local pool
+        local_ouverture = directory_get_ouverture()
+        local_objects = local_ouverture / 'objects'
+        remote_objects = cache_path / 'objects'
+
+        if not remote_objects.exists():
+            print(f"Warning: No objects directory in remote repository")
+            print("Pulled 0 new functions from '{name}'")
+            return
+
+        # Copy all objects
+        pulled_count = 0
+        for item in remote_objects.rglob('*.json'):
+            rel_path = item.relative_to(remote_objects)
+            local_item = local_objects / rel_path
+
+            if not local_item.exists():
+                local_item.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, local_item)
+                pulled_count += 1
+
+        print(f"Pulled {pulled_count} new functions from '{name}'")
+
     else:
-        # HTTP/HTTPS remote
-        print("Error: HTTP/HTTPS remotes not yet implemented", file=sys.stderr)
-        print("TODO: Implement REST API client for pulling functions", file=sys.stderr)
+        # HTTP/HTTPS remote (not Git)
+        print(f"Error: Remote type '{remote_type}' not yet implemented", file=sys.stderr)
         sys.exit(1)
 
 
@@ -997,6 +1239,8 @@ def command_remote_push(name: str):
     Args:
         name: Remote name to push to
     """
+    import shutil
+
     config = config_read()
 
     if name not in config['remotes']:
@@ -1005,17 +1249,13 @@ def command_remote_push(name: str):
 
     remote = config['remotes'][name]
     url = remote['url']
+    remote_type = remote.get('type', remote_type_detect(url))
 
     print(f"Pushing to remote '{name}': {url}")
     print()
 
-    # TODO: Implement actual network operations
-    # For file:// URLs, we could copy to local filesystem
-    # For http:// and https:// URLs, we would need a server API
-
-    if url.startswith('file://'):
-        # Local file system remote
-        import shutil
+    if remote_type == 'file':
+        # Local file system remote (direct copy)
         remote_path = Path(url[7:])  # Remove file:// prefix
 
         # Create remote directory if it doesn't exist
@@ -1033,21 +1273,63 @@ def command_remote_push(name: str):
         # Copy all objects
         pushed_count = 0
         for item in local_objects.rglob('*.json'):
-            # Compute relative path
             rel_path = item.relative_to(local_objects)
             remote_item = remote_objects / rel_path
 
-            # Only copy if doesn't exist remotely
             if not remote_item.exists():
                 remote_item.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, remote_item)
                 pushed_count += 1
 
         print(f"Pushed {pushed_count} new functions to '{name}'")
+
+    elif remote_type in ('git-ssh', 'git-https', 'git-file'):
+        # Git remote - sync repo, copy objects, commit and push
+        parsed = git_url_parse(url)
+        cache_path = git_cache_path(name)
+
+        # First, ensure we have the latest from remote
+        print(f"Syncing Git repository from {parsed['git_url']}...")
+        if not git_clone_or_fetch(parsed['git_url'], cache_path):
+            print("Error: Failed to sync Git repository", file=sys.stderr)
+            sys.exit(1)
+
+        # Copy functions from local pool to cached repository
+        local_ouverture = directory_get_ouverture()
+        local_objects = local_ouverture / 'objects'
+        remote_objects = cache_path / 'objects'
+
+        if not local_objects.exists():
+            print("Error: Local objects directory not found", file=sys.stderr)
+            sys.exit(1)
+
+        # Copy all new objects to cache
+        pushed_count = 0
+        for item in local_objects.rglob('*.json'):
+            rel_path = item.relative_to(local_objects)
+            remote_item = remote_objects / rel_path
+
+            if not remote_item.exists():
+                remote_item.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, remote_item)
+                pushed_count += 1
+
+        if pushed_count == 0:
+            print("No new functions to push")
+            return
+
+        # Commit and push changes
+        print(f"Committing {pushed_count} new functions...")
+        commit_msg = f"Add {pushed_count} function(s) from ouverture push"
+        if not git_commit_and_push(cache_path, commit_msg):
+            print("Error: Failed to commit and push changes", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Pushed {pushed_count} new functions to '{name}'")
+
     else:
-        # HTTP/HTTPS remote
-        print("Error: HTTP/HTTPS remotes not yet implemented", file=sys.stderr)
-        print("TODO: Implement REST API client for pushing functions", file=sys.stderr)
+        # HTTP/HTTPS remote (not Git)
+        print(f"Error: Remote type '{remote_type}' not yet implemented", file=sys.stderr)
         sys.exit(1)
 
 
