@@ -216,6 +216,7 @@ We especially welcome:
 
 ## Known Issues
 
+- **Only functions are supported**: Classes and methods cannot be stored by ouverture (only standalone functions)
 - Import normalization has a typo (`couverture` instead of `ouverture`)
 - Only supports Python 3.9+ (requires `ast.unparse()`)
 - No semantic analysis (purely syntactic)
