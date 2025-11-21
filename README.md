@@ -1,5 +1,7 @@
 # ouverture.py
 
+![Tests](https://github.com/amirouche/ouverture.py/actions/workflows/test.yml/badge.svg)
+
 **Infrastructure for cognitive diversity in the post-LLM era**
 
 This is draft infrastructure exploring whether cognitive diversity enables LLM/non-LLM compatibility. The code is messy because we're learning. Contributions welcome, especially from non-English-dominant perspectives.

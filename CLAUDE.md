@@ -146,6 +146,14 @@ python3 ouverture.py get HASH@lang
 - **Constants**: UPPER_SNAKE_CASE (`PYTHON_BUILTINS`)
 - **Normalized names**: `_ouverture_v_N` (N = 0, 1, 2, ...)
 
+### Testing Conventions
+
+- **Test framework**: pytest
+- **Test structure**: All tests MUST be functions, not classes
+- **Test naming**: Use descriptive names like `test_<component>_<behavior>` (e.g., `test_ast_normalizer_visit_name_with_mapping`)
+- **Test file**: `test_ouverture.py` contains 50+ test functions
+- **Documentation**: See `README_PYTEST.md` for comprehensive testing guide
+
 ### Important Invariants
 
 1. **Function name always `_ouverture_v_0`**: First entry in name mapping
@@ -157,6 +165,36 @@ python3 ouverture.py get HASH@lang
 7. **Hash format**: 64 lowercase hex characters (SHA256)
 
 ## Testing Strategy
+
+### Pytest Unit Tests
+
+The project includes comprehensive pytest unit tests in `test_ouverture.py`. See `README_PYTEST.md` for detailed documentation.
+
+**CRITICAL REQUIREMENT**: All pytest tests MUST be implemented as functions, not classes. Use descriptive function names like `test_ast_normalizer_visit_name_with_mapping()` instead of class-based organization.
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=ouverture --cov-report=html
+
+# Run specific test
+pytest test_ouverture.py::test_ast_normalizer_visit_name_with_mapping
+
+# Run tests matching pattern
+pytest -k "ast_normalizer"
+```
+
+The test suite covers:
+- AST normalization and transformation
+- Name mapping and unmapping
+- Import handling (standard and ouverture)
+- Hash computation and determinism
+- Storage and retrieval functions
+- CLI commands with error handling
+- End-to-end integration tests
+- Multilingual function support
 
 ### Running Examples
 
@@ -327,7 +365,7 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 
 - **Versioning**: JSON has `"version": 0` field for schema evolution
 - **Type checking**: Consider adding mypy type checking
-- **Testing framework**: Consider pytest for automated testing
+- **Testing framework**: Project uses pytest for automated testing (see `test_ouverture.py` and `README_PYTEST.md`)
 - **Documentation generation**: Extract docstrings to generate docs
 - **Package distribution**: Consider setuptools/pyproject.toml for PyPI
 
