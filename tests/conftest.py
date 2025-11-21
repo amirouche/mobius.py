@@ -96,7 +96,7 @@ class CLIRunner:
 
     Directory structure:
         ouverture_dir/
-        ├── git/           # Pool directory (git repository)
+        ├── pool/          # Pool directory (git repository)
         │   └── objects/
         └── config/        # Configuration directory
             └── config.json
@@ -104,7 +104,7 @@ class CLIRunner:
 
     def __init__(self, ouverture_dir: Path):
         self.ouverture_dir = ouverture_dir
-        self.pool_dir = ouverture_dir / 'git'
+        self.pool_dir = ouverture_dir / 'pool'
         self.config_dir = ouverture_dir / 'config'
         self.env = {
             'OUVERTURE_DIRECTORY': str(ouverture_dir)
@@ -148,13 +148,13 @@ def mock_ouverture_dir(tmp_path, monkeypatch):
 
     Directory structure:
         tmp_path/.ouverture/
-        ├── git/           # Pool directory
+        ├── pool/          # Pool directory
         │   └── objects/
         └── config/        # Configuration directory
             └── config.json
     """
     base_dir = tmp_path / '.ouverture'
-    pool_dir = base_dir / 'git'
+    pool_dir = base_dir / 'pool'
     config_dir = base_dir / 'config'
 
     def _get_temp_ouverture_dir():
@@ -180,11 +180,11 @@ def cli_runner(tmp_path):
     Use this for integration tests that call CLI commands.
     Creates the directory structure:
         tmp_path/.ouverture/
-        ├── git/objects/    # Pool directory
+        ├── pool/objects/   # Pool directory
         └── config/         # Configuration directory
     """
     ouverture_dir = tmp_path / '.ouverture'
-    pool_dir = ouverture_dir / 'git'
+    pool_dir = ouverture_dir / 'pool'
     objects_dir = pool_dir / 'objects'
     config_dir = ouverture_dir / 'config'
 

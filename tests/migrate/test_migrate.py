@@ -32,7 +32,7 @@ def test_schema_migrate_function_v0_to_v1_basic(mock_ouverture_dir):
     assert version == 1
 
     # Verify v0 still exists (keep_v0=True)
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'git'
+    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
     v0_path = pool_dir / 'objects' / func_hash[:2] / f'{func_hash[2:]}.json'
     assert v0_path.exists()
 
@@ -64,7 +64,7 @@ def test_schema_migrate_function_v0_to_v1_delete_v0(mock_ouverture_dir):
     assert version == 1
 
     # Verify v0 was deleted
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'git'
+    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
     v0_path = pool_dir / 'objects' / func_hash[:2] / f'{func_hash[2:]}.json'
     assert not v0_path.exists()
 

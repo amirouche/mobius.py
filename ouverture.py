@@ -477,7 +477,7 @@ def directory_get_ouverture() -> Path:
 
     Directory structure:
         $OUVERTURE_DIRECTORY/
-        ├── git/           # Git repository containing the pool (objects)
+        ├── pool/          # Pool directory (git repository for objects)
         │   └── objects/
         └── config/        # Configuration directory
             └── config.json
@@ -493,9 +493,9 @@ def directory_get_ouverture() -> Path:
 def directory_get_pool() -> Path:
     """
     Get the pool directory (git repository) where objects are stored.
-    Returns: $OUVERTURE_DIRECTORY/git/
+    Returns: $OUVERTURE_DIRECTORY/pool/
     """
-    return directory_get_ouverture() / 'git'
+    return directory_get_ouverture() / 'pool'
 
 
 def directory_get_config() -> Path:

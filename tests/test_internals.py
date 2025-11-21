@@ -862,7 +862,7 @@ def test_mapping_compute_hash_canonical_json():
 
 def test_schema_detect_version_v0(mock_ouverture_dir):
     """Test that schema_detect_version correctly identifies v0 format"""
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'git'
+    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
     objects_dir = pool_dir / 'objects'
     test_hash = "abcd1234" + "0" * 56
 
@@ -889,7 +889,7 @@ def test_schema_detect_version_v0(mock_ouverture_dir):
 
 def test_schema_detect_version_v1(mock_ouverture_dir):
     """Test that schema_detect_version correctly identifies v1 format"""
-    pool_dir = mock_ouverture_dir / '.ouverture' / 'git'
+    pool_dir = mock_ouverture_dir / '.ouverture' / 'pool'
     objects_dir = pool_dir / 'objects'
     test_hash = "abcd1234" + "0" * 56
 
