@@ -2427,6 +2427,253 @@ def schema_validate_v1(func_hash: str) -> tuple:
     return True, []
 
 
+def command_caller(hash_value: str):
+    """
+    Find all functions that depend on the given function.
+
+    Scans all functions in the pool and prints `ouverture.py show CALLER_HASH`
+    for each function that imports the given hash.
+
+    Args:
+        hash_value: Function hash (64-character hex) to find callers of
+    """
+    # Validate hash format
+    if len(hash_value) != 64 or not all(c in '0123456789abcdef' for c in hash_value.lower()):
+        print(f"Error: Invalid hash format. Expected 64 hex characters. Got: {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if function exists
+    version = schema_detect_version(hash_value)
+    if version is None:
+        print(f"Error: Function not found: {hash_value}", file=sys.stderr)
+        sys.exit(1)
+
+    ouverture_dir = directory_get_ouverture()
+    objects_dir = ouverture_dir / 'objects'
+
+    if not objects_dir.exists():
+        return
+
+    callers = []
+
+    # Scan for v1 functions (objects/sha256/XX/YYY.../object.json)
+    v1_dir = objects_dir / 'sha256'
+    if v1_dir.exists():
+        for hash_prefix_dir in v1_dir.iterdir():
+            if not hash_prefix_dir.is_dir():
+                continue
+
+            for func_dir in hash_prefix_dir.iterdir():
+                if not func_dir.is_dir():
+                    continue
+
+                object_json = func_dir / 'object.json'
+                if not object_json.exists():
+                    continue
+
+                try:
+                    with open(object_json, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+
+                    func_hash = data['hash']
+                    normalized_code = data['normalized_code']
+
+                    # Check if this function depends on the target hash
+                    deps = dependencies_extract(normalized_code)
+                    if hash_value in deps:
+                        callers.append(func_hash)
+                except (IOError, json.JSONDecodeError):
+                    continue
+
+    # Scan for v0 functions (objects/XX/YYY.json)
+    for hash_prefix_dir in objects_dir.iterdir():
+        if not hash_prefix_dir.is_dir():
+            continue
+        if hash_prefix_dir.name == 'sha256':
+            continue
+
+        for json_file in hash_prefix_dir.glob('*.json'):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                func_hash = data['hash']
+                normalized_code = data['normalized_code']
+
+                # Check if this function depends on the target hash
+                deps = dependencies_extract(normalized_code)
+                if hash_value in deps:
+                    callers.append(func_hash)
+            except (IOError, json.JSONDecodeError):
+                continue
+
+    # Print results
+    for caller_hash in sorted(callers):
+        print(f"ouverture.py show {caller_hash}")
+
+
+def command_refactor(what_hash: str, from_hash: str, to_hash: str):
+    """
+    Replace a dependency hash with another in a function.
+
+    Creates a new function where all references to from_hash are replaced
+    with to_hash. Copies all language mappings, updating alias_mappings
+    to use the new hash key.
+
+    Args:
+        what_hash: Function hash to modify (64-character hex)
+        from_hash: Dependency hash to replace (64-character hex)
+        to_hash: New dependency hash (64-character hex)
+    """
+    # Validate hash formats
+    for name, h in [('what', what_hash), ('from', from_hash), ('to', to_hash)]:
+        if len(h) != 64 or not all(c in '0123456789abcdef' for c in h.lower()):
+            print(f"Error: Invalid {name} hash format. Expected 64 hex characters. Got: {h}", file=sys.stderr)
+            sys.exit(1)
+
+    # Check if what function exists
+    what_version = schema_detect_version(what_hash)
+    if what_version is None:
+        print(f"Error: Function not found: {what_hash}", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if to function exists
+    to_version = schema_detect_version(to_hash)
+    if to_version is None:
+        print(f"Error: Target function not found: {to_hash}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load the function's normalized code
+    if what_version == 0:
+        ouverture_dir = directory_get_ouverture()
+        objects_dir = ouverture_dir / 'objects'
+        v0_path = objects_dir / what_hash[:2] / f'{what_hash[2:]}.json'
+        with open(v0_path, 'r', encoding='utf-8') as f:
+            what_data = json.load(f)
+        normalized_code = what_data['normalized_code']
+        # Get all languages from v0 data
+        languages = list(what_data.get('name_mappings', {}).keys())
+    else:
+        func_data = function_load_v1(what_hash)
+        normalized_code = func_data['normalized_code']
+        # Get all languages from v1 directory structure
+        ouverture_dir = directory_get_ouverture()
+        objects_dir = ouverture_dir / 'objects'
+        func_dir = objects_dir / 'sha256' / what_hash[:2] / what_hash[2:]
+        languages = []
+        for item in func_dir.iterdir():
+            if item.is_dir() and len(item.name) == 3:
+                languages.append(item.name)
+
+    # Check that the function actually depends on from_hash
+    deps = dependencies_extract(normalized_code)
+    if from_hash not in deps:
+        print(f"Error: Function {what_hash} does not depend on {from_hash}", file=sys.stderr)
+        sys.exit(1)
+
+    # Replace the dependency in the code
+    tree = ast.parse(normalized_code)
+
+    class DependencyReplacer(ast.NodeTransformer):
+        def visit_ImportFrom(self, node):
+            if node.module == 'ouverture.pool':
+                new_names = []
+                for alias in node.names:
+                    import_name = alias.name
+                    # Check if this is the from_hash import
+                    if import_name.startswith(OUVERTURE_IMPORT_PREFIX):
+                        actual_hash = import_name[len(OUVERTURE_IMPORT_PREFIX):]
+                    else:
+                        actual_hash = import_name
+
+                    if actual_hash == from_hash:
+                        # Replace with to_hash
+                        new_name = OUVERTURE_IMPORT_PREFIX + to_hash
+                        new_names.append(ast.alias(name=new_name, asname=alias.asname))
+                    else:
+                        new_names.append(alias)
+                node.names = new_names
+            return node
+
+        def visit_Attribute(self, node):
+            # Transform object_from_hash._ouverture_v_0 -> object_to_hash._ouverture_v_0
+            if (isinstance(node.value, ast.Name) and
+                node.attr == '_ouverture_v_0'):
+                prefixed_name = node.value.id
+                if prefixed_name.startswith(OUVERTURE_IMPORT_PREFIX):
+                    actual_hash = prefixed_name[len(OUVERTURE_IMPORT_PREFIX):]
+                else:
+                    actual_hash = prefixed_name
+
+                if actual_hash == from_hash:
+                    node.value.id = OUVERTURE_IMPORT_PREFIX + to_hash
+            self.generic_visit(node)
+            return node
+
+    replacer = DependencyReplacer()
+    tree = replacer.visit(tree)
+    ast.fix_missing_locations(tree)
+
+    new_normalized_code = ast.unparse(tree)
+
+    # Compute new hash (hash is computed on code without docstring)
+    # First, extract the code without docstring
+    new_tree = ast.parse(new_normalized_code)
+    for node in new_tree.body:
+        if isinstance(node, ast.FunctionDef):
+            _, func_without_docstring = docstring_extract(node)
+            # Rebuild module without docstring for hashing
+            imports = [n for n in new_tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+            module_without_docstring = ast.Module(body=imports + [func_without_docstring], type_ignores=[])
+            ast.fix_missing_locations(module_without_docstring)
+            code_without_docstring = ast.unparse(module_without_docstring)
+            break
+
+    new_hash = hash_compute(code_without_docstring)
+
+    # Create metadata for the new function
+    metadata = metadata_create()
+
+    # Save the new function (object.json)
+    function_save_v1(new_hash, new_normalized_code, metadata)
+
+    # Copy all language mappings from what_hash to new_hash
+    for lang in languages:
+        if what_version == 0:
+            docstring = what_data.get('docstrings', {}).get(lang, '')
+            name_mapping = what_data['name_mappings'][lang]
+            alias_mapping = what_data.get('alias_mappings', {}).get(lang, {})
+            comment = ''
+
+            # Update alias_mapping: replace from_hash key with to_hash
+            new_alias_mapping = {}
+            for dep_hash, alias in alias_mapping.items():
+                if dep_hash == from_hash:
+                    new_alias_mapping[to_hash] = alias
+                else:
+                    new_alias_mapping[dep_hash] = alias
+
+            mapping_save_v1(new_hash, lang, docstring, name_mapping, new_alias_mapping, comment)
+        else:
+            # v1: get all mappings for this language
+            mappings = mappings_list_v1(what_hash, lang)
+            for mapping_hash, comment in mappings:
+                docstring, name_mapping, alias_mapping, comment = mapping_load_v1(what_hash, lang, mapping_hash)
+
+                # Update alias_mapping: replace from_hash key with to_hash
+                new_alias_mapping = {}
+                for dep_hash, alias in alias_mapping.items():
+                    if dep_hash == from_hash:
+                        new_alias_mapping[to_hash] = alias
+                    else:
+                        new_alias_mapping[dep_hash] = alias
+
+                mapping_save_v1(new_hash, lang, docstring, name_mapping, new_alias_mapping, comment)
+
+    # Print the result command
+    print(f"ouverture.py show {new_hash}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='ouverture - Function pool manager')
     subparsers = parser.add_subparsers(dest='command', help='Commands')
@@ -2509,6 +2756,16 @@ def main():
     validate_parser = subparsers.add_parser('validate', help='Validate v1 function structure')
     validate_parser.add_argument('hash', help='Function hash to validate')
 
+    # Caller command
+    caller_parser = subparsers.add_parser('caller', help='Find functions that depend on a given function')
+    caller_parser.add_argument('hash', help='Function hash to find callers of')
+
+    # Refactor command
+    refactor_parser = subparsers.add_parser('refactor', help='Replace a dependency in a function')
+    refactor_parser.add_argument('what', help='Function hash to modify')
+    refactor_parser.add_argument('from_hash', metavar='from', help='Dependency hash to replace')
+    refactor_parser.add_argument('to_hash', metavar='to', help='New dependency hash')
+
     args = parser.parse_args()
 
     if args.command == 'init':
@@ -2560,6 +2817,10 @@ def main():
             for error in errors:
                 print(f"  - {error}", file=sys.stderr)
             sys.exit(1)
+    elif args.command == 'caller':
+        command_caller(args.hash)
+    elif args.command == 'refactor':
+        command_refactor(args.what, args.from_hash, args.to_hash)
     else:
         parser.print_help()
 
