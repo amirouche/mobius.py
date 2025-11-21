@@ -1342,14 +1342,119 @@ def command_search(query: List[str]):
         print()
 
 
-def command_run(hash_with_lang: str, debug: bool = False):
+def code_strip_ouverture_imports(code: str) -> str:
+    """
+    Strip ouverture.pool import statements from code.
+
+    These imports are handled separately by loading dependencies into the namespace.
+
+    Args:
+        code: Source code with possible ouverture.pool imports
+
+    Returns:
+        Code with ouverture.pool imports removed
+    """
+    tree = ast.parse(code)
+
+    # Filter out ouverture.pool imports
+    new_body = []
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == 'ouverture.pool':
+            continue
+        new_body.append(node)
+
+    tree.body = new_body
+    return ast.unparse(tree)
+
+
+def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, loaded: set = None):
+    """
+    Recursively load a function and all its dependencies into a namespace.
+
+    Creates a module-like object for each dependency that can be accessed as:
+    HASH._ouverture_v_0(args) -> alias(args)
+
+    Args:
+        func_hash: Function hash to load
+        lang: Language code
+        namespace: Dictionary to populate with loaded functions
+        loaded: Set of already loaded hashes (to avoid cycles)
+
+    Returns:
+        The function object
+    """
+    if loaded is None:
+        loaded = set()
+
+    if func_hash in loaded:
+        # Already loaded, return the existing module
+        return namespace.get(func_hash)
+
+    loaded.add(func_hash)
+
+    # Load the function
+    try:
+        normalized_code, name_mapping, alias_mapping, docstring = function_load(func_hash, lang)
+    except SystemExit:
+        print(f"Error: Could not load dependency {func_hash}@{lang}", file=sys.stderr)
+        sys.exit(1)
+
+    # First, recursively load all dependencies
+    deps = dependencies_extract(normalized_code)
+    for dep_hash in deps:
+        dependencies_load_recursive(dep_hash, lang, namespace, loaded)
+
+    # Denormalize the code
+    normalized_code_with_doc = docstring_replace(normalized_code, docstring)
+    original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
+
+    # Strip ouverture imports (dependencies are already in namespace)
+    executable_code = code_strip_ouverture_imports(original_code)
+
+    # For each alias in alias_mapping, add the dependency function to namespace with that name
+    for dep_hash, alias in alias_mapping.items():
+        if dep_hash in namespace:
+            # The dependency's function is already loaded, make alias point to it
+            dep_module = namespace[dep_hash]
+            if hasattr(dep_module, '_ouverture_v_0'):
+                namespace[alias] = dep_module._ouverture_v_0
+
+    # Execute the code in the namespace (dependencies are already loaded)
+    try:
+        exec(executable_code, namespace)
+    except Exception as e:
+        print(f"Error executing dependency {func_hash}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+    # Get function name and create a module-like object for this hash
+    func_name = name_mapping.get('_ouverture_v_0', 'unknown')
+
+    if func_name in namespace:
+        # Create a simple namespace object that has _ouverture_v_0 attribute
+        class OuvertureModule:
+            pass
+
+        module = OuvertureModule()
+        module._ouverture_v_0 = namespace[func_name]
+        namespace[func_hash] = module
+
+    return namespace.get(func_name)
+
+
+def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None):
     """
     Execute a function from the pool interactively.
 
     Args:
         hash_with_lang: Function hash with language (e.g., "abc123...@eng")
         debug: If True, run with debugger (pdb)
+        func_args: Arguments to pass to the function (after --)
     """
+    if func_args is None:
+        func_args = []
+
     # Parse hash and language
     if '@' not in hash_with_lang:
         print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
@@ -1374,12 +1479,23 @@ def command_run(hash_with_lang: str, debug: bool = False):
         print(f"Error: Could not load function {hash_value}@{lang}", file=sys.stderr)
         sys.exit(1)
 
+    # Get function name from mapping
+    func_name = name_mapping.get('_ouverture_v_0', 'unknown_function')
+
+    # Create execution namespace
+    namespace = {}
+
+    # First, load all dependencies recursively
+    deps = dependencies_extract(normalized_code)
+    if deps:
+        print(f"Loading {len(deps)} dependencies...")
+        for dep_hash in deps:
+            dependencies_load_recursive(dep_hash, lang, namespace, set())
+        print()
+
     # Denormalize to original language
     normalized_code_with_doc = docstring_replace(normalized_code, docstring)
     original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
-
-    # Get function name from mapping
-    func_name = name_mapping.get('_ouverture_v_0', 'unknown_function')
 
     print(f"Running function: {func_name} ({lang})")
     print("=" * 60)
@@ -1387,12 +1503,20 @@ def command_run(hash_with_lang: str, debug: bool = False):
     print("=" * 60)
     print()
 
-    # Create execution namespace
-    namespace = {}
+    # Strip ouverture imports (dependencies are already in namespace)
+    executable_code = code_strip_ouverture_imports(original_code)
+
+    # For each alias in alias_mapping, add the dependency function to namespace with that name
+    for dep_hash, alias in alias_mapping.items():
+        if dep_hash in namespace:
+            # The dependency's function is already loaded, make alias point to it
+            dep_module = namespace[dep_hash]
+            if hasattr(dep_module, '_ouverture_v_0'):
+                namespace[alias] = dep_module._ouverture_v_0
 
     # Execute the code
     try:
-        exec(original_code, namespace)
+        exec(executable_code, namespace)
     except Exception as e:
         print(f"Error executing function: {e}", file=sys.stderr)
         import traceback
@@ -1406,7 +1530,37 @@ def command_run(hash_with_lang: str, debug: bool = False):
 
     func = namespace[func_name]
 
-    if debug:
+    # If arguments were provided, execute the function directly
+    if func_args:
+        # Parse arguments - try to convert to appropriate types
+        parsed_args = []
+        for arg in func_args:
+            # Try int
+            try:
+                parsed_args.append(int(arg))
+                continue
+            except ValueError:
+                pass
+            # Try float
+            try:
+                parsed_args.append(float(arg))
+                continue
+            except ValueError:
+                pass
+            # Keep as string
+            parsed_args.append(arg)
+
+        print(f"Calling: {func_name}({', '.join(repr(a) for a in parsed_args)})")
+        print()
+        try:
+            result = func(*parsed_args)
+            print(f"Result: {result}")
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    elif debug:
         # Run with debugger
         import pdb
         print("Starting debugger...")
@@ -2200,6 +2354,7 @@ def main():
     run_parser = subparsers.add_parser('run', help='Execute function interactively')
     run_parser.add_argument('hash', help='Function hash with language (e.g., abc123...@eng)')
     run_parser.add_argument('--debug', action='store_true', help='Run with debugger (pdb)')
+    run_parser.add_argument('func_args', nargs='*', help='Arguments to pass to function (after --)')
 
     # Review command
     review_parser = subparsers.add_parser('review', help='Recursively review function and dependencies')
@@ -2261,7 +2416,7 @@ def main():
     elif args.command == 'translate':
         command_translate(args.hash, args.target_lang)
     elif args.command == 'run':
-        command_run(args.hash, debug=args.debug)
+        command_run(args.hash, debug=args.debug, func_args=args.func_args)
     elif args.command == 'review':
         command_review(args.hash)
     elif args.command == 'log':
