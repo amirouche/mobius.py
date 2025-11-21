@@ -1,6 +1,6 @@
-# TODO
+# ROADMAP
 
-This document tracks actionable items for Ouverture development.
+This document tracks the development roadmap for Ouverture.
 
 Context sources:
 - `LIMITS.md` - Current capabilities and known limitations
@@ -132,6 +132,64 @@ Context sources:
 - Create snapshot tests for expected normalizations
 - Mark known issues with `@pytest.mark.xfail`
 - Add regression test suite for bug fixes
+
+### Transcript-Based Testing
+
+Transcript testing uses markdown files to define CLI test scenarios declaratively.
+
+**Why it works for Ouverture**:
+- CLI commands produce deterministic, predictable output
+- Tests follow a consistent setup → command → assert pattern
+- Non-programmers can contribute test cases
+- Tests serve as self-documenting examples
+
+**Example transcript format** (`tests/transcripts/add_show_roundtrip.md`):
+
+~~~markdown
+# Test: Add then Show Roundtrip
+
+## Setup
+
+Create file `greet.py`:
+
+```python
+def greet(name):
+    """Greet someone by name"""
+    return f"Hello, {name}!"
+```
+
+## Transcript
+
+```console
+$ ouverture.py add greet.py@eng
+Hash: {HASH}
+
+$ ouverture.py show {HASH}@eng
+def greet(name):
+    """Greet someone by name"""
+    return f'Hello, {name}!'
+```
+
+## Assertions
+
+- `{HASH}` is a 64-character hex string
+- Show output contains `def greet`
+- Show output contains `Hello`
+~~~
+
+**Implementation tasks**:
+- Create transcript parser for markdown format
+- Implement variable capture (`{HASH}` patterns)
+- Build transcript runner with temp directory isolation
+- Support pattern matching for non-deterministic output
+- Integrate with pytest as custom test collector
+
+**Hybrid approach**:
+- Use transcripts for happy-path CLI tests
+- Keep Python tests for:
+  - Complex algorithm unit tests (`test_internals.py`)
+  - Grey-box storage validation
+  - Error condition testing with specific exit codes
 
 ## Priority 6: Semantic Understanding
 

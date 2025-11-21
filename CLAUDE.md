@@ -300,7 +300,7 @@ Functions are stored in `$OUVERTURE_DIRECTORY/objects/XX/YYYYYY.json` (default: 
 
 #### Future Schema (v1) - Implemented
 
-See `TODO.md` Priority 0 for the comprehensive redesign plan.
+See `ROADMAP.md` for the comprehensive development plan.
 
 **Directory Structure:**
 ```
