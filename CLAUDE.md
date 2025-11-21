@@ -552,6 +552,59 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
 4. Result: Same logic = same hash, regardless of language
 ```
 
+### Public-Facing Hash Specification
+
+**Public hashes** in Ouverture refer to content-addressed identifiers that follow strict deterministic serialization rules to ensure global consistency.
+
+#### Hash Computation Rules
+
+1. **Canonical serialization**: Public hashes are computed from JSON-serialized objects with:
+   - **Sorted keys**: `json.dumps(obj, sort_keys=True, ...)` ensures key order is deterministic
+   - **Unicode preservation**: `ensure_ascii=False` maintains Unicode characters without escape sequences
+   - **Consistent encoding**: UTF-8 encoding for all serialized data
+
+2. **Hash vs. filename distinction**:
+   - The hash in a filename (e.g., `objects/ab/cdef123...json`) identifies the **logical content**
+   - It is NOT a hash of the physical file's bytes on disk
+   - The stored JSON may include metadata, formatting, or additional fields not included in hash computation
+
+3. **Intermediate representation hashing**:
+   - The hash may be computed from a canonical intermediate JSON representation
+   - This intermediate form may differ from what is actually written to disk
+   - Example: Function hash computed from normalized code without docstring, but stored JSON includes docstring
+
+#### Example
+
+```python
+# Canonical form for hashing (intermediate representation)
+canonical = {
+    "normalized_code": "def _ouverture_v_0(...):\n    ...",
+    "version": 0
+}
+
+# Compute hash from canonical JSON
+canonical_json = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+hash_value = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+
+# Stored JSON may include additional fields
+stored = {
+    "version": 0,
+    "hash": hash_value,
+    "normalized_code": "def _ouverture_v_0(...):\n    \"\"\"Docstring...\"\"\"\n    ...",
+    "docstrings": {...},
+    "name_mappings": {...},
+    "alias_mappings": {...}
+}
+# Hash of stored JSON ≠ hash_value
+```
+
+#### Implications
+
+- **Reproducibility**: Any system can independently verify hashes by reconstructing the canonical form
+- **Flexibility**: Storage format can evolve without breaking hash-based references
+- **Integrity**: Hash identifies logical content, not storage artifacts
+- **Algorithm flexibility**: System supports SHA256 (current), BLAKE2b, or other algorithms via `hash_algorithm` field
+
 ## Common Pitfalls for AI Assistants
 
 1. **Don't modify hash computation**: Adding docstrings to hash breaks multilingual support
