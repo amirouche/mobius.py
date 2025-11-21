@@ -7,116 +7,23 @@ Context sources:
 - `CLAUDE.md` - Technical architecture and development conventions (single-file design)
 - `README.md` - Project vision and philosophy
 
-## Priority 0: Future-Proof On-Disk Schema
+## Completed Items
 
-**Current schema issues**:
-- Language codes limited to 3 characters (ISO 639-3)
-- Only one name/alias mapping per language
-- Mappings stored inline (no deduplication)
-- Limited extensibility for metadata
+### Schema v1 Implementation ✅
+Complete implementation of the future-proof on-disk schema with content-addressed mappings, multiple language variants, extensible metadata, and migration tools. All 5 implementation phases completed with 105 passing tests.
 
-**Schema redesign requirements**:
+**Details**: See [strategies/schema-v1.md](strategies/schema-v1.md) for comprehensive implementation strategy and checklist.
 
-### Language Support
-- Support language identifiers up to 256 characters
-- Enable custom language tags (e.g., "eng-formal", "fra-canadian", "python-3.12")
-- Allow arbitrary metadata per language variant
-
-### Multiple Mappings Per Language
-- Support multiple name mappings for same function in same language
-- Use case: Different naming conventions (camelCase vs snake_case)
-- Use case: Formal vs informal variable names
-- Store array of mappings rather than single mapping per language
-
-### Content-Addressed Mappings
-- Hash the content of each name/alias mapping (docstring + name_mapping + alias_mapping)
-- Store mappings within function directory: `$OUVERTURE_DIRECTORY/objects/ab/c123.../lang-code/XX/YYYYYY.json`
-  (default: `$HOME/.local/ouverture/objects/ab/c123.../lang-code/XX/YYYYYY.json`)
-- No hash references in object.json - mappings discovered by scanning language directories
-- Deduplication: identical mappings share same hash/file within language directory
-- Structure: `{docstring, name_mapping, alias_mapping}`
-- All function data grouped in single directory for easy management
-
-### Schema Versioning and Migration
-- Implement schema version migration strategy
-- Support reading old schema versions
-- Provide migration tool: `ouverture.py migrate`
-- Document migration path from v0 to v1+
-
-### Extensible Metadata
-- Add `metadata` field for extensible key-value pairs
-- Support: author, timestamp, tags, description
-- Support: dependencies (list of function hashes this depends on)
-- Support: test_cases, examples
-- Support: performance_characteristics (time/space complexity)
-- Keep backward compatibility (optional fields)
-
-### Alternative Hash Algorithms
-- Support multiple hash algorithms (SHA256, BLAKE2b, etc.)
-- Store hash algorithm in metadata: `hash_algorithm: "sha256"`
-- Enable migration to stronger algorithms in future
-- Verify hash on load using specified algorithm
-
-### Compression and Encoding
-- Add optional compression for large normalized_code
-- Store encoding type in metadata: `encoding: "gzip" | "none"`
-- Transparent decompression on load
-
-### Proposed Schema v1 - Directory Structure
-
-```
-$OUVERTURE_DIRECTORY/objects/          # Default: $HOME/.local/ouverture/objects/
-  ab/                                    # First 2 chars of function hash
-    c123def456.../                       # Function directory (remaining hash chars)
-      object.json                        # Core function data (no language data)
-      eng/                               # Language code directory
-        xy/                              # First 2 chars of mapping hash
-          z789.../mapping.json          # Complete mapping for this variant
-        ab/
-          cdef.../mapping.json          # Another variant for eng
-      fra-canadian/                      # Another language (up to 256 chars)
-        mn/
-          opqr.../mapping.json
-```
-
-### object.json (minimal - no duplication)
-
-```json
-{
-  "schema_version": 1,
-  "hash": "abc123def456...",
-  "hash_algorithm": "sha256",
-  "normalized_code": "def _ouverture_v_0(...):\n    ...",
-  "encoding": "none",
-  "metadata": {
-    "created": "2025-11-21T10:00:00Z",
-    "author": "username",
-    "tags": ["math", "statistics"],
-    "dependencies": ["def456...", "ghi789..."]
-  }
-}
-```
-
-**No language-specific data** - docstrings, name_mappings, alias_mappings live only in mapping.json files
-
-### mapping.json (in lang-code/XX/YYY.../mapping.json)
-
-```json
-{
-  "docstring": "Calculate the average of a list of numbers",
-  "name_mapping": {"_ouverture_v_0": "calculate_average", "_ouverture_v_1": "numbers"},
-  "alias_mapping": {"abc123": "helper"}
-}
-```
-
-Mapping files are content-addressed by hashing their content, enabling deduplication across functions.
-
-### Implementation Plan
-- Design schema v1 with all future-proofing features
-- Implement backward compatibility: read v0, write v1
-- Create migration tool for existing pools
-- Add validation for schema integrity
-- Document schema in detail for external implementations
+**Implemented features**:
+- Content-addressed language mappings with deduplication
+- Support for multiple mapping variants per language
+- Extensible metadata (author, timestamp, tags, dependencies)
+- Alternative hash algorithm support (sha256 foundation)
+- Schema version detection and backward compatibility
+- Migration tool (`ouverture.py migrate`) for v0 → v1
+- Validation tool (`ouverture.py validate`) for v1 functions
+- Mapping exploration (`ouverture.py show`) with selection menu
+- Comment field for mapping variant identification
 
 ## Priority 1: User Identity and Configuration
 
