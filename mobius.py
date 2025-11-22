@@ -668,7 +668,6 @@ def code_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]
     with open(object_json, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-    print(f"Function saved (v1): {object_json}")
     print(f"Hash: {hash_value}")
 
 
@@ -718,8 +717,6 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
     with open(mapping_json, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-    print(f"Mapping saved (v1): {mapping_json}")
-    print(f"Language: {lang}")
     print(f"Mapping hash: {mapping_hash}")
 
     return mapping_hash
@@ -1991,7 +1988,6 @@ def command_translate(hash_with_lang: str, target_lang: str):
     mapping_save_v1(hash_value, target_lang, target_docstring, name_mapping_target, alias_mapping_target, comment)
 
     print()
-    print(f"Translation saved: {hash_value}@{target_lang}")
     print(f"View with: mobius.py show {hash_value}@{target_lang}")
 
 
