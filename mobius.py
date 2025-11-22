@@ -440,7 +440,6 @@ def metadata_create() -> Dict[str, any]:
     - created: ISO 8601 timestamp
     - author: Username from environment (USER or USERNAME)
     - tags: Empty list
-    - dependencies: Empty list
 
     Returns:
         Dictionary with metadata fields
@@ -456,8 +455,7 @@ def metadata_create() -> Dict[str, any]:
     return {
         'created': timestamp,
         'author': author,
-        'tags': [],
-        'dependencies': []
+        'tags': []
     }
 
 
@@ -626,17 +624,17 @@ def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, 
     Save function to mobius directory using schema v1.
 
     Creates the function directory and object.json file:
-    - Directory: $MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../
-    - File: $MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+    - Directory: $MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../
+    - File: $MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../object.json
 
     Args:
         hash_value: Function hash (64-character hex)
         normalized_code: Normalized code with docstring
-        metadata: Metadata dict (created, author, tags, dependencies)
+        metadata: Metadata dict (created, author, tags)
     """
     pool_dir = directory_get_pool()
 
-    # Create function directory: objects/sha256/XX/YYYYYY.../
+    # Create function directory: pool/sha256/XX/YYYYYY.../
     func_dir = pool_dir / 'sha256' / hash_value[:2] / hash_value[2:]
     func_dir.mkdir(parents=True, exist_ok=True)
 
@@ -646,9 +644,8 @@ def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, 
     data = {
         'schema_version': 1,
         'hash': hash_value,
-        'hash_algorithm': 'sha256',
         'normalized_code': normalized_code,
-        'encoding': 'none',
+        'related': [],
         'metadata': metadata
     }
 
@@ -2082,11 +2079,11 @@ def function_load_v1(hash_value: str) -> Dict[str, any]:
         hash_value: Function hash (64-character hex)
 
     Returns:
-        Dictionary with schema_version, hash, hash_algorithm, normalized_code, encoding, metadata
+        Dictionary with schema_version, hash, normalized_code, related, metadata
     """
     pool_dir = directory_get_pool()
 
-    # Build path: objects/sha256/XX/YYYYYY.../object.json
+    # Build path: pool/sha256/XX/YYYYYY.../object.json
     func_dir = pool_dir / 'sha256' / hash_value[:2] / hash_value[2:]
     object_json = func_dir / 'object.json'
 
@@ -2406,7 +2403,7 @@ def schema_validate_v1(func_hash: str) -> tuple:
             func_data = json.load(f)
 
         # Check required fields
-        required_fields = ['schema_version', 'hash', 'hash_algorithm', 'normalized_code', 'encoding', 'metadata']
+        required_fields = ['schema_version', 'hash', 'normalized_code', 'related', 'metadata']
         for field in required_fields:
             if field not in func_data:
                 errors.append(f"Missing required field in object.json: {field}")
