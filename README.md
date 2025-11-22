@@ -1,8 +1,10 @@
-# mobius.py
+# ♻️ mobius.py
 
 ![Tests](https://github.com/amirouche/mobius.py/actions/workflows/test.yml/badge.svg)
 
 **Beyond Babel, Python all around the world, one function at a time**
+
+> ⚠️ **Experimental**: This is research software under active development.
 
 Write functions in your language. Share logic universally. Mobius creates bridges through shared logic—not by erasing differences, but by recognizing equivalence where it naturally emerges.
 
@@ -68,17 +70,6 @@ python3 mobius.py get <HASH>@spa  # Returns Spanish version
 **LLM-compatible, human-friendly**: LLMs work with normalized forms while developers work in their native languages. Both perspectives coexist.
 
 **Choice over convention**: You can write in English if you prefer. You can also write in Tagalog, Arabic, or Swahili. The system treats all perspectives as equally valid.
-
-## Status: Experimental Infrastructure
-
-This is research software. The current implementation:
-- ✅ Normalizes Python ASTs
-- ✅ Generates deterministic hashes for equivalent logic
-- ✅ Stores multilingual variants in content-addressed pool
-- ✅ Reconstructs code in target language
-- ⚠️ Has known bugs (e.g., typos in imports)
-- ⚠️ Limited to Python (for now)
-- ⚠️ No semantic understanding (purely syntactic)
 
 ## Quick Start
 
@@ -178,38 +169,6 @@ As AI systems trained predominantly on English codebases become ubiquitous, ther
 
 That's the Mobius transformation: code that flows continuously between linguistic perspectives, recognizing their unity.
 
-## Architecture
-
-- **Single file**: `mobius.py` (~600 lines)
-- **Storage**: `$HOME/.local/mobius/objects/sha256/XX/YYYYYY.../object.json` (content-addressed, configurable via `MOBIUS_DIRECTORY`)
-- **Language codes**: Any string up to 256 characters (e.g., eng, fra, español, 日本語)
-- **Hash algorithm**: SHA256 on normalized AST
-
-See also: `USAGE.md` for CLI commands, `CLAUDE.md` for technical details, `ROADMAP.md` for what's next, `LIMITS.md` for known limitations, and `CONTRIBUTING.md` to get involved.
-
-## Research Questions
-
-1. **Code comprehension**: Does writing in one's native language improve understanding and reduce bugs?
-2. **LLM training**: Could multilingual code pools improve LLM performance on non-English code?
-3. **Semantic equivalence**: When do syntactic differences reflect semantic distinctions vs. mere translation?
-4. **Community building**: Can language-diverse function pools foster more inclusive open source communities?
-
-## Contributions Welcome
-
-We especially welcome:
-- **Non-English examples**: Add functions in your native language
-- **Bug reports**: The code is messy, we know
-- **Linguistic insights**: Are there language structures Python's AST can't normalize?
-- **Alternative implementations**: Try this in other languages (Rust? JavaScript?)
-- **Criticism**: Is this solving a real problem or creating new ones?
-
-## Known Issues
-
-- **Only functions are supported**: Classes and methods cannot be stored by mobius (only standalone functions)
-- Only supports Python 3.9+ (requires `ast.unparse()`)
-- Limited testing on edge cases
-- No package distribution yet
-
 ## License
 
 MIT (see LICENSE file)
@@ -233,6 +192,10 @@ MIT (see LICENSE file)
 ## Contact
 
 File issues on GitHub. We're learning in public.
+
+## See Also
+
+`USAGE.md` for CLI commands, `CLAUDE.md` for technical details, `ROADMAP.md` for what's next, `LIMITS.md` for known limitations, and `CONTRIBUTING.md` to get involved.
 
 ---
 
