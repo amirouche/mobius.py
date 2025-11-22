@@ -3192,21 +3192,23 @@ def code_execute(func_hash: str, lang: str, args: list):
     return runtime_dir
 
 
-def compile_generate_python(func_hash: str, lang: str, debug_mode: bool = False) -> str:
+def compile_generate_python(func_hash: str, lang: str = None, debug_mode: bool = False) -> str:
     """
     Generate a single Python file that includes all dependencies.
 
     Args:
         func_hash: Function hash to compile
-        lang: Language for the function
-        debug_mode: If True, use human-readable names (requires all translations)
+        lang: Language for the function (required if debug_mode=True)
+        debug_mode: If True, use human-readable names (requires lang and all translations)
 
     Returns:
         Python source code as a string
 
     Raises:
-        ValueError: If debug_mode and any dependency is missing the requested language
+        ValueError: If debug_mode and lang is None or any dependency is missing the requested language
     """
+    if debug_mode and lang is None:
+        raise ValueError("debug_mode requires lang parameter")
     # Resolve all dependencies
     deps = code_resolve_dependencies(func_hash)
 
@@ -3334,28 +3336,32 @@ def command_compile(hash_with_lang: str, python_mode: bool = False, debug_mode: 
     Compile a function into a standalone executable or Python file.
 
     Args:
-        hash_with_lang: Function hash with language suffix (HASH@lang)
+        hash_with_lang: Function hash, optionally with language suffix (HASH or HASH@lang)
         python_mode: If True, generate a single Python file instead of native executable
-        debug_mode: If True, use human-readable names (requires all translations)
+        debug_mode: If True, use human-readable names (requires @lang and all translations)
     """
     import shutil
     import platform
 
-    # Parse the hash and language
-    if '@' not in hash_with_lang:
-        print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
-        sys.exit(1)
+    # Parse the hash and optional language
+    if '@' in hash_with_lang:
+        func_hash, lang = hash_with_lang.rsplit('@', 1)
+        # Validate language code
+        if len(lang) < 3 or len(lang) > 256:
+            print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        func_hash = hash_with_lang
+        lang = None
 
-    func_hash, lang = hash_with_lang.rsplit('@', 1)
+    # Debug mode requires language
+    if debug_mode and lang is None:
+        print("Error: --debug requires language suffix. Use format: HASH@lang", file=sys.stderr)
+        sys.exit(1)
 
     # Validate hash format
     if len(func_hash) != 64 or not all(c in '0123456789abcdef' for c in func_hash.lower()):
         print(f"Error: Invalid hash format. Expected 64 hex characters. Got: {func_hash}", file=sys.stderr)
-        sys.exit(1)
-
-    # Validate language code
-    if len(lang) < 3 or len(lang) > 256:
-        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Check if function exists
@@ -3364,7 +3370,10 @@ def command_compile(hash_with_lang: str, python_mode: bool = False, debug_mode: 
         print(f"Error: Function not found: {func_hash}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Compiling function {func_hash[:8]}...@{lang}")
+    if lang:
+        print(f"Compiling function {func_hash[:8]}...@{lang}")
+    else:
+        print(f"Compiling function {func_hash[:8]}...")
 
     # Resolve dependencies
     print("Resolving dependencies...")
@@ -3683,11 +3692,11 @@ def main():
 
     # Compile command
     compile_parser = subparsers.add_parser('compile', help='Compile function to standalone executable')
-    compile_parser.add_argument('hash', help='Function hash with language (e.g., abc123...@eng)')
+    compile_parser.add_argument('hash', help='Function hash (HASH or HASH@lang). @lang required with --debug')
     compile_parser.add_argument('--python', action='store_true',
                                 help='Produce a single Python file instead of native executable (default output: main.py)')
     compile_parser.add_argument('--debug', action='store_true',
-                                help='Use human-readable names (requires all dependencies in requested language)')
+                                help='Use human-readable names (requires HASH@lang and all translations)')
 
     # Fork command
     fork_parser = subparsers.add_parser('fork', help='Fork a function to create a modified version with lineage tracking')

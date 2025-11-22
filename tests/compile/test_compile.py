@@ -14,12 +14,12 @@ from tests.conftest import normalize_code_for_test
 # Integration tests for compile CLI command
 # =============================================================================
 
-def test_compile_missing_language_suffix_fails(cli_runner):
-    """Test that compile fails without language suffix"""
-    result = cli_runner.run(['compile', 'a' * 64])
+def test_compile_debug_without_language_fails(cli_runner):
+    """Test that compile --debug fails without language suffix"""
+    result = cli_runner.run(['compile', '--debug', 'a' * 64])
 
     assert result.returncode != 0
-    assert 'Missing language suffix' in result.stderr
+    assert '--debug requires language suffix' in result.stderr
 
 
 def test_compile_invalid_hash_format_fails(cli_runner):
