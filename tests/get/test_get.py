@@ -146,3 +146,19 @@ def test_get_nonexistent_language_fails(cli_runner, tmp_path):
 
     # Assert
     assert result.returncode != 0
+
+
+def test_get_shows_deprecation_warning(cli_runner, tmp_path):
+    """Test that get shows deprecation warning"""
+    # Setup
+    test_file = tmp_path / "func.py"
+    test_file.write_text('def foo(): pass')
+    func_hash = cli_runner.add(str(test_file), 'eng')
+
+    # Test
+    result = cli_runner.run(['get', f'{func_hash}@eng'])
+
+    # Assert: Deprecation warning in stderr
+    assert result.returncode == 0
+    assert 'deprecated' in result.stderr.lower()
+    assert 'show' in result.stderr

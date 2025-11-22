@@ -2329,6 +2329,9 @@ def code_show(hash_with_lang_and_mapping: str):
 
 def code_get(hash_with_lang: str):
     """Get a function from the mobius pool (backward compatible with show command)"""
+    # Deprecation warning
+    print("Warning: 'get' is deprecated. Use 'show' instead for better mapping support.", file=sys.stderr)
+
     # Parse the hash and language
     if '@' not in hash_with_lang:
         print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
