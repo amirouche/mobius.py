@@ -1,4 +1,4 @@
-# ♻️ mobius.py
+# mobius.py
 
 ![Tests](https://github.com/amirouche/mobius.py/actions/workflows/test.yml/badge.svg)
 
