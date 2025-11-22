@@ -6,13 +6,13 @@ Multilingual function pool: same logic, different languages → same hash.
 
 ```
 usage: mobius.py [-h]
-                    {init,whoami,add,get,show,translate,run,review,log,search,remote,migrate,validate,caller,refactor,compile}
-                    ...
+                 {init,whoami,add,get,show,translate,run,review,log,search,remote,validate,caller,refactor,compile}
+                 ...
 
 mobius - Function pool manager
 
 positional arguments:
-  {init,whoami,add,get,show,translate,run,review,log,search,remote,migrate,validate,caller,refactor,compile}
+  {init,whoami,add,get,show,translate,run,review,log,search,remote,validate,caller,refactor,compile}
                         Commands
     init                Initialize mobius directory and config
     whoami              Get or set user configuration
@@ -25,7 +25,6 @@ positional arguments:
     log                 Show git-like commit log of pool
     search              Search and list functions by query
     remote              Manage remote repositories
-    migrate             Migrate functions from v0 to v1
     validate            Validate v1 function structure
     caller              Find functions that depend on a given function
     refactor            Replace a dependency in a function
@@ -122,29 +121,6 @@ python3 mobius.py show abc123...@eng
 
 # Explicit mapping selection
 python3 mobius.py show abc123...@eng@xyz789...
-```
-
-### `migrate` - Migrate v0 to v1
-
-```bash
-python3 mobius.py migrate [HASH] [--keep-v0] [--dry-run]
-```
-
-Migrate functions from v0 (single JSON file) to v1 (directory structure). Deletes v0 files after successful migration unless `--keep-v0` is specified.
-
-Examples:
-```bash
-# Migrate all functions
-python3 mobius.py migrate
-
-# Migrate specific function
-python3 mobius.py migrate abc123...
-
-# Safe mode: keep v0 files
-python3 mobius.py migrate --keep-v0
-
-# Preview without changes
-python3 mobius.py migrate --dry-run
 ```
 
 ### `validate` - Validate function structure
@@ -371,22 +347,12 @@ Not used. Author identity is automatically taken from `$USER` or `$USERNAME` env
 Default write format. Content-addressed mappings enable deduplication and multiple naming variants per language.
 
 ```
-$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../
+$MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../
   object.json                           # Normalized code + metadata
   eng/sha256/XX/YYY.../mapping.json     # English name mapping
   eng/sha256/ZZ/WWW.../mapping.json     # Another English variant
   fra/sha256/XX/YYY.../mapping.json     # French name mapping
 ```
 
-**object.json**: Function code, hash, metadata (author, timestamp, tags, dependencies)
+**object.json**: Function code, hash, metadata (author, timestamp, tags), related objects
 **mapping.json**: Docstring, name mappings, alias mappings, comment (explains variant)
-
-### Legacy Format (v0)
-
-Read-only support maintained for backward compatibility.
-
-```
-$MOBIUS_DIRECTORY/objects/XX/YYYYYY.json   # Single file
-```
-
-Use `migrate` command to convert v0 to v1.

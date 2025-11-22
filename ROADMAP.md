@@ -14,37 +14,7 @@ Context sources:
 - **asyncify**: Tool for on-the-fly rewriting of synchronous Python code to async/await style
 - **todo-flask**: Reference todo application built with Flask demonstrating mobius integration
 
-## Priority 1: Git Remotes, async def / await Support, Compilation
-
-### Async/Await Support
-- Add support for `async def` functions (ast.AsyncFunctionDef)
-- Handle `await` expressions in normalization
-- Normalize async function names to `_mobius_v_0` like regular functions
-- Document async function behavior and limitations
-
-### Git Remotes
-- Implement `mobius.py remote add NAME git@host:user/repo.git` for Git SSH remotes
-- Implement `mobius.py remote add NAME git+https://host/user/repo.git` for Git HTTPS remotes
-- Implement `mobius.py remote add NAME git+file:///path/to/repo` for local Git remotes
-- Store functions in a Git repository structure compatible with mobius pool format
-- Support authentication via SSH keys and Git credential helpers
-- Implement `remote pull` and `remote push` for Git remotes
-
-### Test Reorganization
-- Reorganize tests into directory structure based on CLI commands
-- Create `tests/` directory with subdirectory per command (e.g., `tests/add/`, `tests/show/`, `tests/run/`)
-- Each command directory contains test cases specific to that CLI command
-- Keep `test_mobius.py` for complex internal tests (AST rewriting, on-disk schema validation, hash computation)
-- Add integration tests that exercise full CLI workflows
-
-### Compilation
-- Implement `mobius.py compile HASH@lang` command to generate standalone executable
-- Use PyOxidizer to bundle Python interpreter with function and dependencies
-- Resolve and include all mobius pool dependencies transitively
-- Generate platform-specific binaries (Linux, macOS, Windows)
-- Support `--output` flag to specify output path
-
-## Priority 2: Remote HTTP/HTTPS Support
+## Priority 1: Remote HTTP/HTTPS Support
 
 ### HTTP/HTTPS Remotes
 - Implement HTTP API client for HTTP/HTTPS remotes
@@ -57,7 +27,7 @@ Context sources:
 - Design SQLite schema for local/file-based remotes
 - Support multiple remotes with priority/fallback
 
-## Priority 3: Search and Discovery Improvements
+## Priority 2: Search and Discovery Improvements
 
 ### Search Filtering
 - Add filtering by language, author, date to `search` command
@@ -83,7 +53,7 @@ Context sources:
   - Index should be optional (search works without it, just slower)
   - Consider memory-mapped index for large repositories (10,000+ functions)
 
-## Priority 4: Code Quality
+## Priority 3: Code Quality
 
 ### Documentation
 - Create `docs/API.md` with Python API documentation
@@ -105,7 +75,7 @@ Context sources:
 - Create platform-specific binaries (Linux, macOS, Windows)
 - Set up automated release pipeline
 
-## Priority 5: Testing Improvements
+## Priority 4: Testing Improvements
 
 ### Property-Based Testing
 - Implement normalization idempotence tests with Hypothesis
@@ -191,7 +161,7 @@ def greet(name):
   - Grey-box storage validation
   - Error condition testing with specific exit codes
 
-## Priority 6: Semantic Understanding
+## Priority 5: Semantic Understanding
 
 ### Short Term (6 months)
 - Implement basic pattern matching for top 10 equivalent patterns (sum() vs loop, etc.)
@@ -211,7 +181,7 @@ def greet(name):
 - Implement hybrid syntactic → pattern → execution → ML pipeline
 - Add cross-language semantic matching (Python ≡ JavaScript)
 
-## Priority 7: Core Features
+## Priority 6: Core Features
 
 ### Language Support
 - Extend language codes beyond 3 characters to support any string <256 chars
@@ -238,7 +208,7 @@ def greet(name):
 - Add `--version` flag
 - Improve error messages with suggestions
 
-## Priority 8: Native Language Debugging
+## Priority 7: Native Language Debugging
 
 ### Traceback Localization
 - Implement traceback rewriting to show native language variable names
@@ -253,7 +223,7 @@ def greet(name):
 - Implement `mobius.py run HASH@lang --debug` for interactive debugging
 - Support stepping through code with native language context
 
-## Priority 9: Infrastructure (Microlibrary Vision)
+## Priority 8: Infrastructure (Microlibrary Vision)
 
 ### Phase 1: Centralized Registry (Months 4-6)
 - Design HTTP API for function registry
@@ -287,7 +257,7 @@ def greet(name):
 - Implement registry priority and fallback
 - Add semantic search with ML embeddings
 
-## Priority 10: Research
+## Priority 9: Research
 
 ### Experiments to Run
 - Benchmark Top 100 equivalent patterns in real Python codebases
@@ -306,7 +276,7 @@ def greet(name):
 - Write paper on impact of native-language programming on comprehension
 - Write paper on multilingual code sharing infrastructure
 
-## Priority 11: Documentation
+## Priority 10: Documentation
 
 ### User Documentation
 - Document workarounds for unsupported features (classes, globals, etc.)
@@ -322,7 +292,7 @@ def greet(name):
 - Document plugin system design (future)
 - Create architecture decision records (ADRs)
 
-## Priority 12: Production Readiness
+## Priority 11: Production Readiness
 
 ### Security
 - Implement static analysis for dangerous patterns (eval, exec, os.system)

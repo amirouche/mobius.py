@@ -4,12 +4,11 @@
 
 1. **Class support**: Would require normalizing method names, class hierarchy, etc.
 2. **Multiple functions per file**: Would require dependency tracking within the file
-3. **Async function support**: Add `ast.AsyncFunctionDef` handling
-4. **Semantic equivalence**: Detect functionally equivalent but syntactically different code
-5. **Type hint normalization**: Optionally normalize type hints for consistent hashing
-6. **Import validation**: Verify mobius imports exist in the pool
-7. **Cross-language support**: Extend beyond Python (JavaScript, Rust, etc.)
-8. **Version migration**: Handle schema changes in stored JSON format
+3. **Semantic equivalence**: Detect functionally equivalent but syntactically different code
+4. **Type hint normalization**: Optionally normalize type hints for consistent hashing
+5. **Import validation**: Verify mobius imports exist in the pool
+6. **Cross-language support**: Extend beyond Python (JavaScript, Rust, etc.)
+7. **Version migration**: Handle schema changes in stored JSON format
 
 ## Research Questions
 

@@ -18,10 +18,9 @@ Functions with identical logic but different naming (e.g., English vs French var
 1. **AST-based normalization**: Source code is parsed into an AST, normalized, then unparsed
 2. **Hash on logic, not names**: Docstrings excluded from hash computation to enable multilingual support
 3. **Bidirectional mapping**: Original names preserved for reconstruction in target language
-4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/mobius/objects/XX/YYYYYY.json` (configurable via `MOBIUS_DIRECTORY` environment variable)
+4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/mobius/pool/sha256/xx/yy.../object.json` (configurable via `MOBIUS_DIRECTORY` environment variable)
 5. **Single-file architecture**: All code resides in `mobius.py` - no modularization into separate packages. This keeps the tool simple, self-contained, and easy to distribute as a single script.
-6. **Native language debugging**: Tracebacks and debugger interactions show variable names in the original human language, not normalized forms
-7. **Object prefix for valid identifiers**: Mobius imports use `object_` prefix (e.g., `from mobius.pool import object_abc123 as func`) to ensure valid Python identifiers since SHA256 hashes can start with digits (0-9)
+6. **Object prefix for valid identifiers**: Mobius imports use `object_` prefix (e.g., `from mobius.pool import object_abc123 as func`) to ensure valid Python identifiers since SHA256 hashes can start with digits (0-9)
 
 ### Storage Location Configuration
 
@@ -29,7 +28,6 @@ The mobius function pool location is controlled by the `MOBIUS_DIRECTORY` enviro
 
 - **Default**: `$HOME/.local/mobius/` (follows XDG Base Directory specification)
 - **Custom location**: Set `MOBIUS_DIRECTORY=/path/to/pool` to override
-- **Legacy behavior**: Set `MOBIUS_DIRECTORY=.mobius` to use project-local storage (pre-v1.0 behavior)
 
 **Examples**:
 ```bash
@@ -39,16 +37,7 @@ python3 mobius.py add example.py@eng
 # Use custom location
 export MOBIUS_DIRECTORY=/shared/pool
 python3 mobius.py add example.py@eng
-
-# Use project-local directory
-export MOBIUS_DIRECTORY=.mobius
-python3 mobius.py add example.py@eng
 ```
-
-**Migration note**: If you have existing `.mobius/` directories in your projects, you can either:
-1. Copy them to `$HOME/.local/mobius/` to consolidate into a global pool
-2. Set `MOBIUS_DIRECTORY=.mobius` to continue using project-local storage
-3. Re-add your functions to the new default location
 
 ### Data Flow
 
@@ -63,31 +52,48 @@ Normalize AST (rename vars, sort imports, rewrite mobius imports)
     ↓
 Compute hash (on code WITHOUT docstring)
     ↓
-Store in $HOME/.local/mobius/objects/ (or $MOBIUS_DIRECTORY/objects/) with:
+Store in $HOME/.local/mobius/pool/ (or $MOBIUS_DIRECTORY/pool/) with:
     - normalized_code (with docstring for display)
     - per-language mappings (name_mappings, alias_mappings, docstrings)
 ```
 
 ## Directory Structure
 
+### Project Structure
+
 ```
-hello-claude/
-├── mobius.py              # Main CLI tool (600+ lines)
-├── examples/                  # Example functions directory
-│   ├── README.md              # Testing documentation
+mobius.py/
+├── mobius.py                      # Main CLI tool
+├── examples/                      # Example functions directory
+│   ├── README.md                  # Examples documentation
 │   ├── example_simple.py          # English example
 │   ├── example_simple_french.py   # French example (same logic)
 │   ├── example_simple_spanish.py  # Spanish example (same logic)
 │   ├── example_with_import.py     # Example with stdlib imports
-│   └── example_with_mobius.py  # Example calling other pool functions
-├── README_TESTING.md          # Testing documentation
-└── .gitignore                 # Ignores __pycache__, etc.
+│   └── example_with_mobius.py     # Example calling other pool functions
+├── strategies/                    # Design documents
+├── tests/                         # Test suite
+└── .gitignore                     # Ignores __pycache__, etc.
+```
 
-# Function pool (default location, configurable via MOBIUS_DIRECTORY):
-$HOME/.local/mobius/
-    └── objects/
-        └── XX/                # First 2 chars of hash
-            └── YYYYYY.json    # Remaining 62 chars + .json
+### Function Pool Structure (v1)
+
+```
+$HOME/.local/mobius/pool/          # Default location (or $MOBIUS_DIRECTORY/pool/)
+└── sha256/                        # Hash algorithm
+    └── ab/                        # First 2 chars of function hash
+        └── c123def456.../         # Function directory (remaining hash chars)
+            ├── object.json        # Core function data
+            ├── eng/               # Language directory
+            │   └── sha256/        # Mapping hash algorithm
+            │       └── xy/        # First 2 chars of mapping hash
+            │           └── z789.../
+            │               └── mapping.json
+            └── fra/               # Another language
+                └── sha256/
+                    └── mn/
+                        └── opqr.../
+                            └── mapping.json
 ```
 
 ## Key Components
@@ -130,12 +136,11 @@ $HOME/.local/mobius/
 - Transforms: `alias(...)` → `HASH._mobius_v_0(...)`
 - Uses alias_mapping to determine which names are mobius functions
 
-#### `hash_compute(code, algorithm='sha256')` (lines 321-335)
-**Generates hash using specified algorithm**
+#### `hash_compute(code)` (lines 321-335)
+**Generates SHA256 hash**
 - CRITICAL: Hash computed on code **WITHOUT docstring**
 - Ensures same logic = same hash across languages
-- **algorithm** parameter supports future hash algorithms (currently only 'sha256')
-- Default algorithm: 'sha256' (64-character hex output)
+- Returns 64-character hex output
 
 #### `mapping_compute_hash(docstring, name_mapping, alias_mapping, comment='')` (lines 338-371)
 **Computes content-addressed hash for language mappings** (Schema v1)
@@ -146,27 +151,27 @@ $HOME/.local/mobius/
 
 #### `schema_detect_version(func_hash)` (lines 374-406)
 **Detects if a function exists in the pool**
-- Checks filesystem for v1 format: `sha256/XX/YYYYYY.../object.json`
+- Checks filesystem for v1 format: `pool/sha256/XX/YYYYYY.../object.json`
 - Returns: 1 if found, None if not found
 
 #### `metadata_create()` (lines 409-435)
 **Generates default metadata for functions** (Schema v1)
 - ISO 8601 timestamp (`created` field)
 - Author from environment (USER or USERNAME)
-- Empty `tags` and `dependencies` lists
+- Empty `tags` list
 - Returns: Dictionary with metadata structure
 - Used when saving functions to v1 format
 
 #### `function_save_v1(hash_value, normalized_code, metadata)` (lines 495-532)
 **Stores function in v1 format** (Schema v1)
-- Creates function directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../`
-- Writes `object.json` with schema_version=1, hash_algorithm, encoding, metadata
+- Creates function directory: `$MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../`
+- Writes `object.json` with schema_version=1, metadata
 - Does NOT store language-specific data (stored separately in mapping files)
 - Clean separation: code in object.json, language variants in mapping.json files
 
 #### `mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment='')` (lines 534-585)
 **Stores language mapping in v1 format** (Schema v1)
-- Creates mapping directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../`
+- Creates mapping directory: `$MOBIUS_DIRECTORY/pool/sha256/XX/Y.../lang/sha256/ZZ/W.../`
 - Writes `mapping.json` with docstring, name_mapping, alias_mapping, comment
 - Content-addressed by mapping hash (enables deduplication)
 - Identical mappings across functions share same file
@@ -181,20 +186,20 @@ $HOME/.local/mobius/
 
 #### `function_load_v1(hash_value)` (lines 816-848)
 **Loads function from pool using schema v1**
-- Reads object.json: `$MOBIUS_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json`
-- Returns: Dictionary with schema_version, hash, hash_algorithm, normalized_code, encoding, metadata
+- Reads object.json: `$MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../object.json`
+- Returns: Dictionary with schema_version, hash, normalized_code, metadata
 - Does NOT load language-specific data (use mapping functions for that)
 
 #### `mappings_list_v1(func_hash, lang)` (lines 851-909)
 **Lists all mapping variants for a language** (Schema v1)
-- Scans language directory: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/`
+- Scans language directory: `$MOBIUS_DIRECTORY/pool/sha256/XX/Y.../lang/`
 - Returns: List of (mapping_hash, comment) tuples
 - Used to discover available mapping variants
 - Returns empty list if language doesn't exist
 
 #### `mapping_load_v1(func_hash, lang, mapping_hash)` (lines 912-950)
 **Loads specific language mapping** (Schema v1)
-- Reads mapping.json: `$MOBIUS_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json`
+- Reads mapping.json: `$MOBIUS_DIRECTORY/pool/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json`
 - Returns: Tuple of (docstring, name_mapping, alias_mapping, comment)
 - Content-addressed storage enables deduplication
 
@@ -221,180 +226,64 @@ $HOME/.local/mobius/
 - Rewrites imports: `from mobius.pool import X` → `from mobius.pool import X as alias` (restores alias)
 - Transforms calls: `HASH._mobius_v_0(...)` → `alias(...)`
 
-#### `schema_validate_v1(func_hash)` (lines 1175-1239)
-**Validate v1 function structure** (Schema Validation)
-- Checks object.json exists and has required fields
-- Verifies at least one language mapping exists
-- Validates schema_version is 1
-- Returns tuple of (is_valid, errors)
-- **Note**: CLI command `mobius.py validate HASH`
-
 ### Storage Schema
 
-See `ROADMAP.md` for the comprehensive development plan.
+See `strategies/schema-v1.md` for the complete specification.
 
 **Directory Structure:**
 ```
-$MOBIUS_DIRECTORY/objects/         # Default: $HOME/.local/mobius/objects/
-  sha256/                             # Hash algorithm name
-    ab/                               # First 2 chars of function hash
-      c123def456.../                  # Function directory (remaining hash chars)
-        object.json                   # Core function data (no language data)
-        eng/                          # Language code directory
-          sha256/                     # Hash algorithm for mapping
-            xy/                       # First 2 chars of mapping hash
-              z789.../                # Mapping directory (remaining hash chars)
-                mapping.json          # Language mapping (content-addressed)
-        fra/                          # Another language
+$MOBIUS_DIRECTORY/pool/            # Default: $HOME/.local/mobius/pool/
+  sha256/                          # Hash algorithm
+    ab/                            # First 2 chars of function hash
+      c123def456.../               # Function directory (remaining hash chars)
+        object.json                # Core function data
+        eng/                       # Language code directory
+          sha256/                  # Hash algorithm for mapping
+            xy/                    # First 2 chars of mapping hash
+              z789.../             # Mapping directory (remaining hash chars)
+                mapping.json       # Language mapping (content-addressed)
+        fra/                       # Another language
           sha256/
             mn/
               opqr.../
-                mapping.json          # Another language/variant
+                mapping.json       # Another language/variant
 ```
 
-**object.json** (minimal - no duplication):
+**object.json**:
 ```json
 {
   "schema_version": 1,
   "hash": "abc123...",
-  "hash_algorithm": "sha256",
-  "normalized_code": "...",
-  "encoding": "none",
+  "normalized_code": "def _mobius_v_0(...):\n    ...",
+  "related": [
+    {"label": "documentation", "hash": "def456..."},
+    {"label": "test", "hash": "ghi789..."}
+  ],
   "metadata": {
     "created": "2025-11-21T10:00:00Z",
     "author": "username",
-    "tags": ["math", "statistics"],
-    "dependencies": ["def456...", "ghi789..."]
+    "tags": ["math", "statistics"]
   }
 }
 ```
 
-**mapping.json** (in lang-code/XX/YYY.../):
+**mapping.json** (in lang/sha256/XX/YYY.../):
 ```json
 {
   "docstring": "Calculate the average...",
-  "name_mapping": {"_mobius_v_0": "calculate_average", ...},
-  "alias_mapping": {"abc123": "helper"}
+  "name_mapping": {"_mobius_v_0": "calculate_average", "_mobius_v_1": "numbers"},
+  "alias_mapping": {"abc123": "helper"},
+  "comment": "Formal mathematical terminology"
 }
 ```
 
-Key improvements:
+Key features:
 - Language identifiers up to 256 characters
 - Multiple mappings per language via multiple mapping.json files
 - Content-addressed mapping storage (deduplicated across functions)
 - No duplication between object.json and mapping.json
-- Extensible metadata (author, timestamp, tags, dependencies)
-- Alternative hash algorithms support
-- Optional compression
-
-### CLI Commands
-
-**Target CLI interface** (some commands not yet implemented):
-
-#### Configuration and Identity
-```bash
-mobius.py init                          # Initialize mobius directory (default: $HOME/.local/mobius/) and config
-mobius.py whoami username [USERNAME]    # Get/set username
-mobius.py whoami email [EMAIL]          # Get/set email
-mobius.py whoami public-key [URL]       # Get/set public key URL
-mobius.py whoami language [LANG...]     # Get/set preferred languages
-```
-
-#### Remote Repository Management
-```bash
-mobius.py remote add NAME URL                    # Add HTTP/HTTPS remote
-mobius.py remote add NAME file:///path/to/db     # Add SQLite file remote
-mobius.py remote remove NAME                     # Remove remote
-mobius.py remote pull NAME                       # Fetch functions from remote
-mobius.py remote push NAME                       # Publish functions to remote
-```
-
-#### Function Operations
-```bash
-mobius.py add FILENAME.py@LANG                      # Add function to local pool
-mobius.py show HASH@LANG[@MAPPING_HASH]             # Show function with mapping exploration (recommended)
-mobius.py get HASH[@LANG] FILENAME.py               # Retrieve function and save to file (in specific language)
-mobius.py translate HASH@LANG LANG                  # Add translation for existing function
-mobius.py review HASH                               # Recursively review function and dependencies (in user's languages)
-mobius.py run HASH@lang                             # Execute function interactively
-mobius.py run HASH@lang --debug                     # Execute with debugger (native language variables)
-```
-
-#### Discovery
-```bash
-mobius.py log [NAME | URL]                  # Show git-like commit log of pool/remote
-mobius.py search [NAME | URL] [QUERY...]    # Search and list functions by query
-```
-
-**Currently implemented**:
-- `init` command: Initialize mobius directory and config file
-- `whoami` command: Get/set user configuration (username, email, public-key, language)
-- `add` command: Parses file, normalizes AST, computes hash, saves to local pool
-- `show` command: Shows function with mapping exploration and selection
-- `get` command: Retrieves function from local pool, denormalizes to target language
-- `translate` command: Add translation for existing function (interactive prompts)
-- `run` command: Execute function interactively
-- `run --debug` command: Execute with debugger using native language variables
-- `review` command: Recursively review function and dependencies
-- `log` command: Show git-like commit log of pool
-- `search` command: Search and list functions by query
-- `remote add/remove/list` commands: Manage remote repositories
-- `remote pull/push` commands: Fetch/publish functions (file:// URLs supported, HTTP/HTTPS planned)
-- `validate` command: Validates function structure
-
-**Status**: All commands from the target CLI interface are now implemented. HTTP/HTTPS remotes are planned for future development.
-
-**Language codes**: Currently 3 characters (ISO 639-3: eng, fra, spa, etc.), future support for any string <256 chars
-
-## Native Language Debugging
-
-### Traceback Localization
-
-When executing functions from the pool, exceptions will show variable names in the original human language rather than normalized forms.
-
-**Example**:
-```python
-# Original French function
-def calculer_moyenne(nombres):
-    total = sum(nombres)
-    return total / len(nombres)
-
-# If executed and error occurs, traceback shows:
-# NameError: name 'nombres' is not defined
-# NOT: NameError: name '_mobius_v_1' is not defined
-```
-
-**Implementation approach**:
-- Intercept exceptions during execution
-- Map `_mobius_v_X` back to original names using stored mappings
-- Rewrite traceback with native language variable names
-- Preserve line numbers from original source
-- Show both normalized and native versions for debugging
-
-### Interactive Debugger Integration
-
-When using `mobius.py run HASH@lang --debug`:
-- Variables displayed with native language names
-- Can set breakpoints using original function/variable names
-- Step through code with native language context
-- Inspect values using familiar names (e.g., `print(nombres)` not `print(_mobius_v_1)`)
-
-**Integration with pdb**:
-```python
-# Debugging French function
-(Pdb) l
-  1  def calculer_moyenne(nombres):
-  2      total = sum(nombres)
-  3  ->  return total / len(nombres)
-
-(Pdb) p nombres
-[1, 2, 3, 4, 5]
-
-(Pdb) p total
-15
-```
-
-This makes debugging natural for developers working in their native language.
+- Extensible metadata (author, timestamp, tags)
+- Related objects support for linked functions
 
 ## Development Conventions
 
@@ -440,7 +329,6 @@ This makes debugging natural for developers working in their native language.
 - **Test structure**: All tests MUST be functions, not classes
 - **Test naming**: Use descriptive names like `test_<component>_<behavior>` (e.g., `test_ast_normalizer_visit_name_with_mapping`)
 - **Test file**: `test_mobius.py` contains 50+ test functions
-- **Documentation**: See `README_PYTEST.md` for comprehensive testing guide
 - **Normalized code strings**: All normalized code strings in tests MUST use the `normalize_code_for_test()` helper function. This ensures the code format matches `ast.unparse()` output (with proper line breaks and indentation).
 
 **Example of normalize_code_for_test usage**:
@@ -484,8 +372,6 @@ tests/
 │   └── test_add.py          # Tests for 'mobius.py add' command
 ├── show/
 │   └── test_show.py         # Tests for 'mobius.py show' command
-├── get/
-│   └── test_get.py          # Tests for 'mobius.py get' command
 ├── test_internals.py        # Unit tests for complex algorithms
 └── test_storage.py          # Storage schema validation tests
 ```
@@ -521,7 +407,7 @@ Unit tests are reserved for low-level components where grey-box testing would be
 - **AST normalization** (`ASTNormalizer` class, `ast_normalize` function)
 - **Name mapping** (`mapping_create_name`, `mapping_compute_hash`)
 - **Hash computation** (`hash_compute` with determinism guarantees)
-- **Schema validation** (`schema_detect_version`, `schema_validate_v1`)
+- **Schema detection** (`schema_detect_version`)
 - **Import handling** (`imports_rewrite_mobius`, `calls_replace_mobius`)
 
 These tests live in `tests/test_internals.py`.
@@ -533,7 +419,7 @@ These tests live in `tests/test_internals.py`.
 pytest
 
 # Run integration tests only
-pytest tests/integration/ tests/add/ tests/show/ tests/get/
+pytest tests/integration/ tests/add/ tests/show/
 
 # Run unit tests only
 pytest tests/test_internals.py tests/test_storage.py
@@ -560,11 +446,11 @@ python3 mobius.py add examples/example_simple_french.py@fra
 python3 mobius.py add examples/example_simple_spanish.py@spa
 
 # Verify they share the same hash
-find ~/.local/mobius/objects -name "*.json"  # or $MOBIUS_DIRECTORY/objects/
+find ~/.local/mobius/pool -name "object.json"  # or $MOBIUS_DIRECTORY/pool/
 
-# Retrieve in different language
-python3 mobius.py get HASH@eng
-python3 mobius.py get HASH@fra
+# Show in different language
+python3 mobius.py show HASH@eng
+python3 mobius.py show HASH@fra
 ```
 
 ### Verification Checklist
@@ -589,7 +475,7 @@ python3 mobius.py get HASH@fra
 
 Based on recent commits:
 - Use imperative mood: "Add", "Extract", "Fix"
-- Be specific: "Add 'mobius get HASH@lang' command"
+- Be specific: "Add 'mobius show HASH@lang' command"
 - Reference context: "Extract docstrings from hash computation for multilingual support"
 
 ### Ignored Files
@@ -704,7 +590,7 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
    - **Consistent encoding**: UTF-8 encoding for all serialized data
 
 2. **Hash vs. filename distinction**:
-   - The hash in a filename (e.g., `objects/ab/cdef123.../object.json` or `eng/xy/z789.../mapping.json`) identifies the **logical content**
+   - The hash in a filename (e.g., `pool/sha256/ab/cdef123.../object.json` or `eng/sha256/xy/z789.../mapping.json`) identifies the **logical content**
    - It is NOT a hash of the physical file's bytes on disk
    - The stored JSON may include metadata, formatting, or additional fields not included in hash computation
 
@@ -727,9 +613,8 @@ hash_value = hashlib.sha256(canonical_code.encode('utf-8')).hexdigest()
 stored = {
     "schema_version": 1,
     "hash": hash_value,
-    "hash_algorithm": "sha256",
     "normalized_code": "def _mobius_v_0(...):\n    \"\"\"Docstring...\"\"\"\n    ...",
-    "encoding": "none",
+    "related": [],
     "metadata": {...}
 }
 # Hash of stored JSON ≠ hash_value (hash is of code only)
@@ -740,7 +625,6 @@ stored = {
 - **Reproducibility**: Any system can independently verify hashes by reconstructing the canonical form
 - **Flexibility**: Storage format can evolve without breaking hash-based references
 - **Integrity**: Hash identifies logical content, not storage artifacts
-- **Algorithm flexibility**: System supports SHA256 (current), BLAKE2b, or other algorithms via `hash_algorithm` field
 
 ## Common Pitfalls for AI Assistants
 
@@ -763,7 +647,7 @@ stored = {
 ### Future Considerations
 
 - **Type checking**: Consider adding mypy type checking
-- **Testing framework**: Project uses pytest for automated testing (see `test_mobius.py` and `README_PYTEST.md`)
+- **Testing framework**: Project uses pytest for automated testing (see `test_mobius.py`)
 - **Documentation generation**: Extract docstrings to generate docs
 - **Package distribution**: Consider setuptools/pyproject.toml for PyPI
 
@@ -801,11 +685,11 @@ When referencing code locations, use this format:
 
 ## Debugging Tips
 
-1. **Inspect JSON**: `cat .mobius/objects/XX/YYY.json | python3 -m json.tool`
+1. **Inspect JSON**: `cat ~/.local/mobius/pool/sha256/XX/YYY.../object.json | python3 -m json.tool`
 2. **Check AST**: Use `ast.dump()` to inspect tree structure
 3. **Compare hashes**: Same logic should produce same hash
 4. **Verify mappings**: Check name_mappings in JSON for correctness
-5. **Test round-trip**: `add` then `get` should produce equivalent code
+5. **Test round-trip**: `add` then `show` should produce equivalent code
 
 ## Summary
 
@@ -816,4 +700,4 @@ Mobius is a carefully designed system for multilingual function sharing through 
 - Ensure hash computation remains deterministic
 - Maintain backward compatibility with existing pool data
 
-The codebase is self-contained (single file), well-structured (clear function boundaries), and follows Python best practices. The testing guide (README_TESTING.md) provides comprehensive examples for validation.
+The codebase is self-contained (single file), well-structured (clear function boundaries), and follows Python best practices.
