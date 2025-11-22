@@ -897,14 +897,30 @@ def test_metadata_create_basic():
     metadata = mobius.code_create_metadata()
 
     assert 'created' in metadata
-    assert 'author' in metadata
+    assert 'name' in metadata
+    assert 'email' in metadata
 
 
-def test_metadata_create_with_author():
-    """Test that metadata_create uses author from environment"""
-    with patch.dict(os.environ, {'USER': 'testuser'}):
-        metadata = mobius.code_create_metadata()
-        assert metadata['author'] == 'testuser'
+def test_metadata_create_reads_from_config(mock_mobius_dir):
+    """Test that metadata_create reads name and email from config"""
+    # Write config with name and email
+    config = {
+        'user': {
+            'name': 'testuser',
+            'email': 'test@example.com',
+            'public_key': '',
+            'languages': []
+        },
+        'remotes': {}
+    }
+    config_path = mobius.storage_get_mobius_directory() / 'config.json'
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, 'w') as f:
+        json.dump(config, f)
+
+    metadata = mobius.code_create_metadata()
+    assert metadata['name'] == 'testuser'
+    assert metadata['email'] == 'test@example.com'
 
 
 def test_metadata_create_timestamp_format():

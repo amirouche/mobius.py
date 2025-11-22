@@ -141,7 +141,7 @@ def test_validate_no_language_mapping_fails(tmp_path):
         'schema_version': 1,
         'hash': fake_hash,
         'normalized_code': 'def _mobius_v_0(): pass',
-        'metadata': {'created': '2025-01-01', 'author': 'test'}
+        'metadata': {'created': '2025-01-01', 'name': 'test', 'email': 'test@example.com'}
     }))
 
     # Test

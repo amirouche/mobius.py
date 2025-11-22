@@ -21,7 +21,8 @@ def test_function_save_v1_creates_object_json(mock_mobius_dir):
     normalized_code = normalize_code_for_test("def _mobius_v_0(): pass")
     metadata = {
         'created': '2025-01-01T00:00:00Z',
-        'author': 'testuser'
+        'name': 'testuser',
+        'email': 'test@example.com'
     }
 
     mobius.code_save_v1(test_hash, normalized_code, metadata)
@@ -170,7 +171,8 @@ def test_v1_write_integration_full_structure(mock_mobius_dir):
     normalized_code = normalize_code_for_test("def _mobius_v_0(_mobius_v_1): return _mobius_v_1 * 2")
     metadata = {
         'created': '2025-01-01T00:00:00Z',
-        'author': 'testuser',
+        'name': 'testuser',
+        'email': 'test@example.com',
         'tags': ['math'],
         'dependencies': []
     }
@@ -221,7 +223,8 @@ def test_function_load_v1_loads_object_json(mock_mobius_dir):
     normalized_code = normalize_code_for_test("def _mobius_v_0(_mobius_v_1): return _mobius_v_1 * 2")
     metadata = {
         'created': '2025-01-01T00:00:00Z',
-        'author': 'testuser',
+        'name': 'testuser',
+        'email': 'test@example.com',
         'tags': ['test'],
         'dependencies': []
     }

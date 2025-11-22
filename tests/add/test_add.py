@@ -175,17 +175,17 @@ def test_add_missing_language_suffix_fails(cli_runner, tmp_path):
 
 
 def test_add_invalid_language_code_fails(cli_runner, tmp_path):
-    """Test that add fails with invalid language code"""
+    """Test that add fails with too short language code"""
     # Setup
     test_file = tmp_path / "test.py"
     test_file.write_text('def foo(): pass')
 
-    # Test: Run with invalid lang
-    result = cli_runner.run(['add', f'{test_file}@invalid'])
+    # Test: Run with too short lang (must be 3-256 chars)
+    result = cli_runner.run(['add', f'{test_file}@ab'])
 
     # Assert: Should fail
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr
 
 
 def test_add_nonexistent_file_fails(cli_runner):

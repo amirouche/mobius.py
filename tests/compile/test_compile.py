@@ -55,20 +55,12 @@ def test_compile_prepares_bundle(cli_runner, tmp_path):
     assert result.returncode != 0
 
 
-def test_compile_invalid_language_code_fails(cli_runner):
-    """Test that compile fails with invalid language code"""
-    result = cli_runner.run(['compile', 'a' * 64 + '@toolong'])
-
-    assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
-
-
 def test_compile_too_short_language_code_fails(cli_runner):
     """Test that compile fails with too short language code"""
     result = cli_runner.run(['compile', 'a' * 64 + '@ab'])
 
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr
 
 
 # =============================================================================

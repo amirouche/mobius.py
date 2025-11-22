@@ -196,10 +196,10 @@ def test_workflow_error_handling_missing_language(cli_runner, tmp_path):
 
 
 def test_workflow_error_handling_invalid_language(cli_runner, tmp_path):
-    """Test error handling for invalid language code"""
+    """Test error handling for too short language code"""
     test_file = tmp_path / "test.py"
     test_file.write_text('def foo(): pass')
 
-    result = cli_runner.run(['add', f'{test_file}@invalid'])
+    result = cli_runner.run(['add', f'{test_file}@ab'])
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr

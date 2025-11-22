@@ -438,7 +438,8 @@ def code_create_metadata(parent: str = None) -> Dict[str, any]:
 
     Generates metadata with:
     - created: ISO 8601 timestamp
-    - author: Username from environment (USER or USERNAME)
+    - name: User's name from config
+    - email: User's email from config
     - parent: Optional parent function hash (for lineage tracking)
 
     Args:
@@ -449,15 +450,18 @@ def code_create_metadata(parent: str = None) -> Dict[str, any]:
     """
     from datetime import datetime
 
-    # Get author from environment
-    author = os.environ.get('USER', os.environ.get('USERNAME', ''))
+    # Get name and email from config
+    config = storage_read_config()
+    name = config['user'].get('name', '')
+    email = config['user'].get('email', '')
 
     # Get current timestamp in ISO 8601 format
     timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
     metadata = {
         'created': timestamp,
-        'author': author
+        'name': name,
+        'email': email
     }
 
     if parent:
@@ -516,7 +520,7 @@ def storage_read_config() -> Dict[str, any]:
     if not config_path.exists():
         return {
             'user': {
-                'username': '',
+                'name': '',
                 'email': '',
                 'public_key': '',
                 'languages': []
@@ -586,14 +590,14 @@ def command_whoami(subcommand: str, value: list = None):
     Get or set user configuration.
 
     Args:
-        subcommand: One of 'username', 'email', 'public-key', 'language'
+        subcommand: One of 'name', 'email', 'public-key', 'language'
         value: New value(s) to set (None to get current value)
     """
     config = storage_read_config()
 
     # Map CLI subcommand to config key
     key_map = {
-        'username': 'username',
+        'name': 'name',
         'email': 'email',
         'public-key': 'public_key',
         'language': 'languages'
@@ -601,7 +605,7 @@ def command_whoami(subcommand: str, value: list = None):
 
     if subcommand not in key_map:
         print(f"Error: Unknown subcommand: {subcommand}", file=sys.stderr)
-        print("Valid subcommands: username, email, public-key, language", file=sys.stderr)
+        print("Valid subcommands: name, email, public-key, language", file=sys.stderr)
         sys.exit(1)
 
     config_key = key_map[subcommand]
@@ -1787,8 +1791,8 @@ def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None
     hash_value, lang = hash_with_lang.rsplit('@', 1)
 
     # Validate language code
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Validate hash format
@@ -1924,12 +1928,12 @@ def command_translate(hash_with_lang: str, target_lang: str):
     hash_value, source_lang = hash_with_lang.rsplit('@', 1)
 
     # Validate language codes
-    if len(source_lang) != 3:
-        print(f"Error: Source language code must be 3 characters (ISO 639-3). Got: {source_lang}", file=sys.stderr)
+    if len(source_lang) < 3 or len(source_lang) > 256:
+        print(f"Error: Source language code must be 3-256 characters. Got: {source_lang}", file=sys.stderr)
         sys.exit(1)
 
-    if len(target_lang) != 3:
-        print(f"Error: Target language code must be 3 characters (ISO 639-3). Got: {target_lang}", file=sys.stderr)
+    if len(target_lang) < 3 or len(target_lang) > 256:
+        print(f"Error: Target language code must be 3-256 characters. Got: {target_lang}", file=sys.stderr)
         sys.exit(1)
 
     # Validate hash format
@@ -2005,8 +2009,8 @@ def code_add(file_path_with_lang: str, comment: str = ""):
     file_path, lang = file_path_with_lang.rsplit('@', 1)
 
     # Validate language code (should be 3 characters, ISO 639-3)
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Check if file exists
@@ -2291,8 +2295,8 @@ def code_show(hash_with_lang_and_mapping: str):
         sys.exit(1)
 
     # Validate language code (should be 3 characters, ISO 639-3)
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Detect schema version
@@ -2351,8 +2355,8 @@ def code_get(hash_with_lang: str):
     hash_value, lang = hash_with_lang.rsplit('@', 1)
 
     # Validate language code (should be 3 characters, ISO 639-3)
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Validate hash format (should be 64 hex characters for SHA256)
@@ -2918,8 +2922,8 @@ def command_compile(hash_with_lang: str, output_path: str = None):
         sys.exit(1)
 
     # Validate language code
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Check if function exists
@@ -3033,8 +3037,8 @@ def command_fork(hash_with_lang: str):
         sys.exit(1)
 
     # Validate language code
-    if len(lang) != 3:
-        print(f"Error: Language code must be 3 characters (ISO 639-3). Got: {lang}", file=sys.stderr)
+    if len(lang) < 3 or len(lang) > 256:
+        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
         sys.exit(1)
 
     # Check if function exists
@@ -3136,7 +3140,7 @@ def main():
 
     # Whoami command
     whoami_parser = subparsers.add_parser('whoami', help='Get or set user configuration')
-    whoami_parser.add_argument('subcommand', choices=['username', 'email', 'public-key', 'language'],
+    whoami_parser.add_argument('subcommand', choices=['name', 'email', 'public-key', 'language'],
                                help='Configuration field to get/set')
     whoami_parser.add_argument('value', nargs='*', help='New value(s) to set (omit to get current value)')
 

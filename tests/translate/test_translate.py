@@ -50,20 +50,21 @@ def test_translate_missing_source_language_fails(tmp_path):
 
 
 def test_translate_invalid_source_language_fails(tmp_path):
-    """Test that translate fails with invalid source language code"""
+    """Test that translate fails with too short source language code"""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
     fake_hash = '0' * 64
 
-    result = cli_run(['translate', f'{fake_hash}@invalid', 'fra'], env=env)
+    # Test with too short language code (must be 3-256 chars)
+    result = cli_run(['translate', f'{fake_hash}@ab', 'fra'], env=env)
 
     assert result.returncode != 0
-    assert 'Source language code must be 3 characters' in result.stderr
+    assert 'Source language code must be 3-256 characters' in result.stderr
 
 
 def test_translate_invalid_target_language_fails(tmp_path):
-    """Test that translate fails with invalid target language code"""
+    """Test that translate fails with too short target language code"""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
@@ -73,11 +74,11 @@ def test_translate_invalid_target_language_fails(tmp_path):
     add_result = cli_run(['add', f'{test_file}@eng'], env=env)
     func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
 
-    # Test
-    result = cli_run(['translate', f'{func_hash}@eng', 'toolong'], env=env)
+    # Test with too short language code (must be 3-256 chars)
+    result = cli_run(['translate', f'{func_hash}@eng', 'ab'], env=env)
 
     assert result.returncode != 0
-    assert 'Target language code must be 3 characters' in result.stderr
+    assert 'Target language code must be 3-256 characters' in result.stderr
 
 
 def test_translate_invalid_hash_fails(tmp_path):

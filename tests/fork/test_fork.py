@@ -47,18 +47,6 @@ def test_fork_invalid_hash_format_fails(tmp_path):
     assert 'Invalid hash format' in result.stderr
 
 
-def test_fork_invalid_language_code_fails(tmp_path):
-    """Test that fork fails with invalid language code"""
-    mobius_dir = tmp_path / '.mobius'
-    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
-    fake_hash = 'a' * 64
-
-    result = cli_run(['fork', f'{fake_hash}@toolong'], env=env)
-
-    assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
-
-
 def test_fork_too_short_language_code_fails(tmp_path):
     """Test that fork fails with too short language code"""
     mobius_dir = tmp_path / '.mobius'
@@ -68,7 +56,7 @@ def test_fork_too_short_language_code_fails(tmp_path):
     result = cli_run(['fork', f'{fake_hash}@ab'], env=env)
 
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr
 
 
 def test_fork_nonexistent_function_fails(tmp_path):
@@ -92,7 +80,8 @@ def test_metadata_without_parent():
     metadata = mobius.code_create_metadata()
 
     assert 'created' in metadata
-    assert 'author' in metadata
+    assert 'name' in metadata
+    assert 'email' in metadata
     assert 'parent' not in metadata
 
 
@@ -103,7 +92,8 @@ def test_metadata_with_parent():
     metadata = mobius.code_create_metadata(parent=parent_hash)
 
     assert 'created' in metadata
-    assert 'author' in metadata
+    assert 'name' in metadata
+    assert 'email' in metadata
     assert 'parent' in metadata
     assert metadata['parent'] == parent_hash
 

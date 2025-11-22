@@ -41,15 +41,15 @@ def test_run_missing_language_fails(tmp_path):
 
 
 def test_run_invalid_language_fails(tmp_path):
-    """Test that run fails with invalid language code"""
+    """Test that run fails with too short language code"""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
     fake_hash = '0' * 64
-    result = cli_run(['run', f'{fake_hash}@invalid'], env=env)
+    result = cli_run(['run', f'{fake_hash}@ab'], env=env)
 
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr
 
 
 def test_run_invalid_hash_fails(tmp_path):
@@ -76,50 +76,6 @@ def test_run_nonexistent_function_fails(tmp_path):
     assert 'Could not load function' in result.stderr or 'not found' in result.stderr.lower()
 
 
-def test_run_with_integer_argument(tmp_path):
-    """Test running function with integer argument"""
-    mobius_dir = tmp_path / '.mobius'
-    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
-
-    # Setup
-    test_file = tmp_path / "func.py"
-    test_file.write_text('''def double(x):
-    """Double a number"""
-    return x * 2
-''')
-    add_result = cli_run(['add', f'{test_file}@eng'], env=env)
-    func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
-
-    # Test
-    result = cli_run(['run', f'{func_hash}@eng', '--', '5'], env=env)
-
-    # Assert
-    assert result.returncode == 0
-    assert 'Result: 10' in result.stdout
-
-
-def test_run_with_float_argument(tmp_path):
-    """Test running function with float argument"""
-    mobius_dir = tmp_path / '.mobius'
-    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
-
-    # Setup
-    test_file = tmp_path / "func.py"
-    test_file.write_text('''def triple(x):
-    """Triple a number"""
-    return x * 3
-''')
-    add_result = cli_run(['add', f'{test_file}@eng'], env=env)
-    func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
-
-    # Test
-    result = cli_run(['run', f'{func_hash}@eng', '--', '2.5'], env=env)
-
-    # Assert
-    assert result.returncode == 0
-    assert 'Result: 7.5' in result.stdout
-
-
 def test_run_with_string_argument(tmp_path):
     """Test running function with string argument"""
     mobius_dir = tmp_path / '.mobius'
@@ -134,7 +90,7 @@ def test_run_with_string_argument(tmp_path):
     add_result = cli_run(['add', f'{test_file}@eng'], env=env)
     func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
 
-    # Test
+    # Test - arguments are passed as strings, no implicit coercion
     result = cli_run(['run', f'{func_hash}@eng', '--', 'World'], env=env)
 
     # Assert
@@ -142,26 +98,26 @@ def test_run_with_string_argument(tmp_path):
     assert 'Hello, World!' in result.stdout
 
 
-def test_run_with_multiple_arguments(tmp_path):
-    """Test running function with multiple arguments"""
+def test_run_with_multiple_string_arguments(tmp_path):
+    """Test running function with multiple string arguments (no implicit coercion)"""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
-    # Setup
+    # Setup - function concatenates strings
     test_file = tmp_path / "func.py"
-    test_file.write_text('''def add(a, b):
-    """Add two numbers"""
+    test_file.write_text('''def concat(a, b):
+    """Concatenate two strings"""
     return a + b
 ''')
     add_result = cli_run(['add', f'{test_file}@eng'], env=env)
     func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
 
-    # Test
-    result = cli_run(['run', f'{func_hash}@eng', '--', '3', '4'], env=env)
+    # Test - arguments passed as strings
+    result = cli_run(['run', f'{func_hash}@eng', '--', 'Hello', 'World'], env=env)
 
     # Assert
     assert result.returncode == 0
-    assert 'Result: 7' in result.stdout
+    assert 'HelloWorld' in result.stdout
 
 
 def test_run_displays_function_code(tmp_path):

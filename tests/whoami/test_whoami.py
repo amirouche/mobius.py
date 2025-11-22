@@ -29,32 +29,32 @@ def cli_run(args: list, env: dict = None, cwd: str = None) -> subprocess.Complet
     )
 
 
-def test_whoami_get_username_empty_without_init(tmp_path):
-    """Test getting username returns empty when config doesn't exist."""
+def test_whoami_get_name_empty_without_init(tmp_path):
+    """Test getting name returns empty when config doesn't exist."""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
-    result = cli_run(['whoami', 'username'], env=env)
+    result = cli_run(['whoami', 'name'], env=env)
 
     assert result.returncode == 0
     assert result.stdout.strip() == ''
 
 
-def test_whoami_set_and_get_username(tmp_path):
-    """Test setting and getting username."""
+def test_whoami_set_and_get_name(tmp_path):
+    """Test setting and getting name."""
     mobius_dir = tmp_path / '.mobius'
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
     # Initialize first
     cli_run(['init'], env=env)
 
-    # Set username
-    result = cli_run(['whoami', 'username', 'testuser'], env=env)
+    # Set name
+    result = cli_run(['whoami', 'name', 'testuser'], env=env)
     assert result.returncode == 0
-    assert 'Set username: testuser' in result.stdout
+    assert 'Set name: testuser' in result.stdout
 
-    # Get username
-    result = cli_run(['whoami', 'username'], env=env)
+    # Get name
+    result = cli_run(['whoami', 'name'], env=env)
     assert result.returncode == 0
     assert result.stdout.strip() == 'testuser'
 
@@ -149,13 +149,13 @@ def test_whoami_persists_to_config_file(tmp_path):
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
     cli_run(['init'], env=env)
-    cli_run(['whoami', 'username', 'persisteduser'], env=env)
+    cli_run(['whoami', 'name', 'persisteduser'], env=env)
     cli_run(['whoami', 'email', 'persisted@example.com'], env=env)
 
     # Read config directly
     config = json.loads((mobius_dir / 'config.json').read_text())
 
-    assert config['user']['username'] == 'persisteduser'
+    assert config['user']['name'] == 'persisteduser'
     assert config['user']['email'] == 'persisted@example.com'
 
 
@@ -166,7 +166,7 @@ def test_whoami_corrupted_config_fails_gracefully(tmp_path):
     (mobius_dir / 'config.json').write_text('corrupted json')
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
-    result = cli_run(['whoami', 'username'], env=env)
+    result = cli_run(['whoami', 'name'], env=env)
 
     assert result.returncode == 1
     assert 'Error' in result.stderr

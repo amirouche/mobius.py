@@ -247,12 +247,12 @@ def test_show_invalid_hash_format_fails(cli_runner):
 
 
 def test_show_invalid_language_code_fails(cli_runner, tmp_path):
-    """Test that show fails with invalid language code"""
+    """Test that show fails with too short language code"""
     test_file = tmp_path / "func.py"
     test_file.write_text('def foo(): pass')
     func_hash = cli_runner.add(str(test_file), 'eng')
 
-    result = cli_runner.run(['show', f'{func_hash}@invalid'])
+    result = cli_runner.run(['show', f'{func_hash}@ab'])
 
     assert result.returncode != 0
-    assert 'Language code must be 3 characters' in result.stderr
+    assert 'Language code must be 3-256 characters' in result.stderr
