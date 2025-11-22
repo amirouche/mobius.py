@@ -15,3 +15,4 @@
 - `compile`: drop --output flag, use a.out or a.out.exe as default output
 - `review`: make interactive, request explicit ack for security/correctness, one function at a time starting from lowest level, remember reviewed functions
 - `validate`: validate whole mobius directory including pool and config
+- `check`: run tests for a function using `@check(func)` decorator, store target hash in `metadata.checks`, scan pool on demand
