@@ -90,59 +90,6 @@ find ~/.local/mobius/objects -name "*.json"
 python3 mobius.py get <HASH>@fra
 ```
 
-## Examples
-
-### Simple Function (No Imports)
-
-**English** (`examples/example_simple.py`):
-```python
-def sum_list(items):
-    """Sum a list of numbers"""
-    total = 0
-    for item in items:
-        total += item
-    return total
-```
-
-**French** (`examples/example_simple_french.py`):
-```python
-def somme_liste(elements):
-    """Somme une liste de nombres"""
-    total = 0
-    for element in elements:
-        total += element
-    return total
-```
-
-These hash to the same value.
-
-### With Standard Library Imports
-
-**English** (`examples/example_with_import.py`):
-```python
-from collections import Counter
-
-def count_frequency(items):
-    """Count frequency of items"""
-    return Counter(items)
-```
-
-Import names (`Counter`) are preserved, variable names (`items`) are normalized.
-
-### Compositional Functions
-
-Functions can reference other functions from the pool:
-
-```python
-from mobius.pool import abc123def as helper
-
-def process_data(values):
-    """Process data using helper function"""
-    return helper(values)
-```
-
-The import is normalized to `from mobius.pool import abc123def`, making it language-agnostic.
-
 ## Why "Mobius"?
 
 Mobius refers to the Mobius strip - a surface with only one side, representing the continuous transformation between languages and the unity of code logic regardless of linguistic expression. Just as the Mobius strip has no boundary between its "sides," Mobius code has no boundary between languages: the same logic flows seamlessly from French to English to Spanish and back.
