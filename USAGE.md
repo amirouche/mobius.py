@@ -2,7 +2,7 @@
 
 Multilingual function pool: same logic, different languages → same hash.
 
-## Commands
+## Top-Level Usage
 
 ```
 usage: mobius.py [-h]
@@ -34,12 +34,37 @@ options:
   -h, --help            show this help message and exit
 ```
 
-## Configuration
+## Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize mobius directory and config |
+| `whoami` | Get or set user configuration |
+| `add` | Add a function to the pool |
+| `get` | Get a function from the pool (deprecated, use `show`) |
+| `show` | Show a function with mapping selection support |
+| `translate` | Add translation for existing function |
+| `run` | Execute function interactively |
+| `review` | Recursively review function and dependencies |
+| `log` | Show git-like commit log of pool |
+| `search` | Search and list functions by query |
+| `remote` | Manage remote repositories |
+| `validate` | Validate v1 function structure |
+| `caller` | Find functions that depend on a given function |
+| `refactor` | Replace a dependency in a function |
+| `compile` | Compile function to standalone executable |
+
+---
+
+## Configuration Commands
 
 ### `init` - Initialize configuration
 
-```bash
-python3 mobius.py init
+```
+usage: mobius.py init [-h]
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Creates the mobius directory and configuration file. Automatically run when needed, but can be called explicitly.
@@ -47,20 +72,30 @@ Creates the mobius directory and configuration file. Automatically run when need
 - Creates: `$HOME/.local/mobius/` (or `$MOBIUS_DIRECTORY`)
 - Creates: `~/.config/mobius/config.json`
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py init
 ```
 
+---
+
 ### `whoami` - User configuration
 
-```bash
-python3 mobius.py whoami {username|email|public-key|language} [VALUE...]
+```
+usage: mobius.py whoami [-h] {username,email,public-key,language} [value ...]
+
+positional arguments:
+  {username,email,public-key,language}
+                        Configuration field to get/set
+  value                 New value(s) to set (omit to get current value)
+
+options:
+  -h, --help            show this help message and exit
 ```
 
 Get or set user configuration. Without VALUE, displays current setting. With VALUE, sets new value.
 
-Examples:
+**Examples:**
 ```bash
 # Get username
 python3 mobius.py whoami username
@@ -81,17 +116,26 @@ python3 mobius.py whoami language eng fra spa
 python3 mobius.py whoami language
 ```
 
-## Function Management
+---
+
+## Function Management Commands
 
 ### `add` - Store a function
 
-```bash
-python3 mobius.py add FILENAME.py@LANG [--comment "description"]
+```
+usage: mobius.py add [-h] [--comment COMMENT] file
+
+positional arguments:
+  file               Path to Python file with @lang suffix (e.g., file.py@eng)
+
+options:
+  -h, --help         show this help message and exit
+  --comment COMMENT  Optional comment explaining this mapping variant
 ```
 
 Normalizes and stores a Python function. Variable names and docstrings are language-specific; logic is hashed.
 
-Examples:
+**Examples:**
 ```bash
 python3 mobius.py add calculate_average.py@eng
 python3 mobius.py add calculer_moyenne.py@fra --comment "version formelle"
@@ -99,15 +143,24 @@ python3 mobius.py add calculer_moyenne.py@fra --comment "version formelle"
 
 Both produce the same hash if logic is identical.
 
+---
+
 ### `show` - Display a function
 
-```bash
-python3 mobius.py show HASH@LANG[@MAPPING_HASH]
+```
+usage: mobius.py show [-h] hash
+
+positional arguments:
+  hash        Function hash with @lang[@mapping_hash] (e.g., abc123...@eng or
+              abc123...@eng@xyz789...)
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Display function with language-specific names. If multiple mappings exist for a language, shows selection menu.
 
-Examples:
+**Examples:**
 ```bash
 # Single mapping: displays function directly
 python3 mobius.py show abc123...@eng
@@ -123,38 +176,42 @@ python3 mobius.py show abc123...@eng
 python3 mobius.py show abc123...@eng@xyz789...
 ```
 
-### `validate` - Validate function structure
-
-```bash
-python3 mobius.py validate HASH
-```
-
-Verify v1 function structure and hash integrity.
-
-Example:
-```bash
-python3 mobius.py validate abc123...
-```
+---
 
 ### `get` - Retrieve a function (deprecated)
 
-```bash
-python3 mobius.py get HASH@LANG
+```
+usage: mobius.py get [-h] hash
+
+positional arguments:
+  hash        Function hash with @lang suffix (e.g., abc123...@eng)
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Reconstructs function with language-specific names.
 
 **Note**: This command is deprecated. Use `show` instead.
 
+---
+
 ### `translate` - Add translation
 
-```bash
-python3 mobius.py translate HASH@SOURCE_LANG TARGET_LANG
+```
+usage: mobius.py translate [-h] hash target_lang
+
+positional arguments:
+  hash         Function hash with source language (e.g., abc123...@eng)
+  target_lang  Target language code (e.g., fra, spa)
+
+options:
+  -h, --help   show this help message and exit
 ```
 
 Add a translation for an existing function. Prompts for translated variable names and docstring.
 
-Examples:
+**Examples:**
 ```bash
 # Translate English function to French
 python3 mobius.py translate abc123...@eng fra
@@ -167,50 +224,125 @@ python3 mobius.py translate abc123...@eng fra
 # 5. Save the translation
 ```
 
-## Execution and Debugging
+---
+
+### `validate` - Validate function structure
+
+```
+usage: mobius.py validate [-h] hash
+
+positional arguments:
+  hash        Function hash to validate
+
+options:
+  -h, --help  show this help message and exit
+```
+
+Verify v1 function structure and hash integrity.
+
+**Example:**
+```bash
+python3 mobius.py validate abc123...
+```
+
+---
+
+## Execution Commands
 
 ### `run` - Execute function interactively
 
-```bash
-python3 mobius.py run HASH@LANG [--debug]
+```
+usage: mobius.py run [-h] [--debug] hash [func_args ...]
+
+positional arguments:
+  hash        Function hash with language (e.g., abc123...@eng)
+  func_args   Arguments to pass to function (after --)
+
+options:
+  -h, --help  show this help message and exit
+  --debug     Run with debugger (pdb)
 ```
 
 Load and execute a function from the pool interactively. With `--debug`, runs with Python debugger (pdb) using native language variable names.
 
-Examples:
+**Examples:**
 ```bash
 # Run function interactively
 python3 mobius.py run abc123...@eng
 
 # Run with debugger
 python3 mobius.py run abc123...@fra --debug
+
+# Run with arguments
+python3 mobius.py run abc123...@eng -- arg1 arg2
 ```
 
-## Discovery
+---
+
+### `compile` - Compile function to executable
+
+```
+usage: mobius.py compile [-h] [--output OUTPUT] hash
+
+positional arguments:
+  hash                  Function hash with language (e.g., abc123...@eng)
+
+options:
+  -h, --help            show this help message and exit
+  --output OUTPUT, -o OUTPUT
+                        Output executable path
+```
+
+Compile function to standalone executable.
+
+**Examples:**
+```bash
+# Compile with default output name
+python3 mobius.py compile abc123...@eng
+
+# Compile with custom output path
+python3 mobius.py compile abc123...@eng --output my_function
+python3 mobius.py compile abc123...@fra -o ./bin/ma_fonction
+```
+
+---
+
+## Discovery Commands
 
 ### `review` - Review function and dependencies
 
-```bash
-python3 mobius.py review HASH
+```
+usage: mobius.py review [-h] hash
+
+positional arguments:
+  hash        Function hash to review
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Recursively review a function and all its dependencies. Displays functions in user's preferred languages (set with `whoami language`).
 
-Example:
+**Example:**
 ```bash
 # Review function and dependencies
 python3 mobius.py review abc123...
 ```
 
+---
+
 ### `log` - Show pool history
 
-```bash
-python3 mobius.py log
+```
+usage: mobius.py log [-h]
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Display a git-like commit log of all functions in the pool with metadata.
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py log
 # Output:
@@ -222,15 +354,23 @@ python3 mobius.py log
 # Schema: v1
 ```
 
+---
+
 ### `search` - Search functions
 
-```bash
-python3 mobius.py search QUERY...
+```
+usage: mobius.py search [-h] query [query ...]
+
+positional arguments:
+  query       Search terms
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Search for functions by name, docstring, or code content.
 
-Examples:
+**Examples:**
 ```bash
 # Search for "average"
 python3 mobius.py search average
@@ -246,17 +386,93 @@ python3 mobius.py search calculate mean
 # - Command to view function
 ```
 
-## Remote Repositories
+---
+
+### `caller` - Find function callers
+
+```
+usage: mobius.py caller [-h] hash
+
+positional arguments:
+  hash        Function hash to find callers of
+
+options:
+  -h, --help  show this help message and exit
+```
+
+Find functions that depend on a given function.
+
+**Example:**
+```bash
+python3 mobius.py caller abc123...
+```
+
+---
+
+## Refactoring Commands
+
+### `refactor` - Replace a dependency
+
+```
+usage: mobius.py refactor [-h] what from to
+
+positional arguments:
+  what        Function hash to modify
+  from        Dependency hash to replace
+  to          New dependency hash
+
+options:
+  -h, --help  show this help message and exit
+```
+
+Replace a dependency in a function with a different function.
+
+**Example:**
+```bash
+# Replace dependency 'old_hash' with 'new_hash' in function 'func_hash'
+python3 mobius.py refactor func_hash old_hash new_hash
+```
+
+---
+
+## Remote Repository Commands
+
+### `remote` - Manage remotes
+
+```
+usage: mobius.py remote [-h] {add,remove,list,pull,push} ...
+
+positional arguments:
+  {add,remove,list,pull,push}
+                        Remote subcommands
+    add                 Add remote repository
+    remove              Remove remote repository
+    list                List configured remotes
+    pull                Fetch functions from remote
+    push                Publish functions to remote
+
+options:
+  -h, --help            show this help message and exit
+```
+
+---
 
 ### `remote add` - Add remote
 
-```bash
-python3 mobius.py remote add NAME URL
+```
+usage: mobius.py remote add [-h] name url
+
+positional arguments:
+  name        Remote name
+  url         Remote URL (http://, https://, or file://)
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Add a remote repository. Supports `file://`, `http://`, and `https://` URLs.
 
-Examples:
+**Examples:**
 ```bash
 # Add local file remote
 python3 mobius.py remote add shared file:///shared/pool
@@ -265,28 +481,41 @@ python3 mobius.py remote add shared file:///shared/pool
 python3 mobius.py remote add origin https://mobius.example.com/pool
 ```
 
+---
+
 ### `remote remove` - Remove remote
 
-```bash
-python3 mobius.py remote remove NAME
+```
+usage: mobius.py remote remove [-h] name
+
+positional arguments:
+  name        Remote name to remove
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Remove a configured remote.
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py remote remove shared
 ```
 
+---
+
 ### `remote list` - List remotes
 
-```bash
-python3 mobius.py remote list
+```
+usage: mobius.py remote list [-h]
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 List all configured remotes.
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py remote list
 # Output:
@@ -295,33 +524,49 @@ python3 mobius.py remote list
 #   origin: https://mobius.example.com/pool
 ```
 
+---
+
 ### `remote pull` - Fetch from remote
 
-```bash
-python3 mobius.py remote pull NAME
+```
+usage: mobius.py remote pull [-h] name
+
+positional arguments:
+  name        Remote name to pull from
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Fetch functions from a remote repository. Currently supports `file://` URLs. HTTP/HTTPS support planned.
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py remote pull shared
 ```
 
+---
+
 ### `remote push` - Publish to remote
 
-```bash
-python3 mobius.py remote push NAME
+```
+usage: mobius.py remote push [-h] name
+
+positional arguments:
+  name        Remote name to push to
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 Publish functions to a remote repository. Currently supports `file://` URLs. HTTP/HTTPS support planned.
 
-Example:
+**Example:**
 ```bash
 python3 mobius.py remote push shared
 ```
 
-## Schema Management
+---
 
 ## Environment Variables
 
@@ -332,7 +577,7 @@ Storage location for function pool.
 - Default: `$HOME/.local/mobius/`
 - Custom: `export MOBIUS_DIRECTORY=/path/to/pool`
 
-Example:
+**Example:**
 ```bash
 export MOBIUS_DIRECTORY=/shared/pool
 python3 mobius.py add function.py@eng
@@ -341,6 +586,8 @@ python3 mobius.py add function.py@eng
 ### `MOBIUS_USER`
 
 Not used. Author identity is automatically taken from `$USER` or `$USERNAME` environment variables.
+
+---
 
 ## Further Reading
 
