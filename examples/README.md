@@ -1,5 +1,7 @@
 # Mobius Examples
 
+<!-- TODO: Update this file to refresh hashes, follow up on commit d8c2ae0f26dc0f9b55d603799afd05cdf9f8415f -->
+
 Learn by doing! Copy and paste these commands to see how mobius works.
 
 ## Quick Start
