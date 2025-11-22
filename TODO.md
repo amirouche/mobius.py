@@ -3,6 +3,7 @@
 <!-- Format: bullet list with topic, type names, intended feature - one sentence max -->
 <!-- Remove implemented entries in atomic commits (separate from feature commits) -->
 
+- `add`: before adding a function, verify all imports resolve to an object in the local pool
 - `pipe`: command to read stdin, apply function, write result to stdout
 - `html`: command to render pool as static HTML site for browsing
 - `run`: thoroughly review including --debug and arguments passing (no implicit coercion)
