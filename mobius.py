@@ -53,7 +53,7 @@ class ASTNormalizer(ast.NodeTransformer):
         return node
 
 
-def names_collect(tree: ast.Module) -> Set[str]:
+def code_collect_names(tree: ast.Module) -> Set[str]:
     """Collect all names (variables, functions) used in the AST"""
     names = set()
 
@@ -68,7 +68,7 @@ def names_collect(tree: ast.Module) -> Set[str]:
     return names
 
 
-def imports_get_names(tree: ast.Module) -> Set[str]:
+def code_get_import_names(tree: ast.Module) -> Set[str]:
     """Get all names that are imported"""
     imported = set()
 
@@ -83,7 +83,7 @@ def imports_get_names(tree: ast.Module) -> Set[str]:
     return imported
 
 
-def imports_check_unused(tree: ast.Module, imported_names: Set[str], all_names: Set[str]) -> bool:
+def code_check_unused_imports(tree: ast.Module, imported_names: Set[str], all_names: Set[str]) -> bool:
     """Check if all imports are used"""
     for name in imported_names:
         # Check if the imported name is used anywhere besides the import statement
@@ -99,7 +99,7 @@ def imports_check_unused(tree: ast.Module, imported_names: Set[str], all_names: 
     return True
 
 
-def imports_sort(tree: ast.Module) -> ast.Module:
+def code_sort_imports(tree: ast.Module) -> ast.Module:
     """Sort imports lexicographically"""
     imports = []
     other_nodes = []
@@ -124,7 +124,7 @@ def imports_sort(tree: ast.Module) -> ast.Module:
     return tree
 
 
-def function_extract_definition(tree: ast.Module) -> Tuple[Union[ast.FunctionDef, ast.AsyncFunctionDef], List[ast.stmt]]:
+def code_extract_definition(tree: ast.Module) -> Tuple[Union[ast.FunctionDef, ast.AsyncFunctionDef], List[ast.stmt]]:
     """Extract the function definition (sync or async) and import statements"""
     imports = []
     function_def = None
@@ -143,7 +143,7 @@ def function_extract_definition(tree: ast.Module) -> Tuple[Union[ast.FunctionDef
     return function_def, imports
 
 
-def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef], imports: List[ast.stmt],
+def code_create_name_mapping(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef], imports: List[ast.stmt],
                         mobius_aliases: Set[str] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Create mapping from original names to normalized names.
@@ -193,7 +193,7 @@ def mapping_create_name(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDe
     return forward_mapping, reverse_mapping
 
 
-def imports_rewrite_mobius(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
+def code_rewrite_mobius_imports(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dict[str, str]]:
     """
     Remove aliases from 'mobius' imports and track them for later restoration.
     Returns (new_imports, alias_mapping)
@@ -243,7 +243,7 @@ def imports_rewrite_mobius(imports: List[ast.stmt]) -> Tuple[List[ast.stmt], Dic
     return new_imports, alias_mapping
 
 
-def calls_replace_mobius(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
+def code_replace_mobius_calls(tree: ast.AST, alias_mapping: Dict[str, str], name_mapping: Dict[str, str]):
     """
     Replace calls to aliased mobius functions.
     E.g., kawa(...) becomes object_c0ffeebad._mobius_v_0(...)
@@ -270,7 +270,7 @@ def calls_replace_mobius(tree: ast.AST, alias_mapping: Dict[str, str], name_mapp
     return replacer.visit(tree)
 
 
-def ast_clear_locations(tree: ast.AST):
+def code_clear_locations(tree: ast.AST):
     """Set all line and column information to None"""
     for node in ast.walk(tree):
         if hasattr(node, 'lineno'):
@@ -283,7 +283,7 @@ def ast_clear_locations(tree: ast.AST):
             node.end_col_offset = None
 
 
-def docstring_extract(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Tuple[str, Union[ast.FunctionDef, ast.AsyncFunctionDef]]:
+def code_extract_docstring(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> Tuple[str, Union[ast.FunctionDef, ast.AsyncFunctionDef]]:
     """
     Extract docstring from function definition (sync or async).
     Returns (docstring, function_without_docstring)
@@ -304,28 +304,28 @@ def docstring_extract(function_def: Union[ast.FunctionDef, ast.AsyncFunctionDef]
     return docstring if docstring else "", func_copy
 
 
-def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
+def code_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str, str], Dict[str, str]]:
     """
     Normalize the AST according to mobius rules.
     Returns (normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping)
     """
     # Sort imports
-    tree = imports_sort(tree)
+    tree = code_sort_imports(tree)
 
     # Extract function and imports
-    function_def, imports = function_extract_definition(tree)
+    function_def, imports = code_extract_definition(tree)
 
     # Extract docstring from function
-    docstring, function_without_docstring = docstring_extract(function_def)
+    docstring, function_without_docstring = code_extract_docstring(function_def)
 
     # Rewrite mobius imports
-    imports, alias_mapping = imports_rewrite_mobius(imports)
+    imports, alias_mapping = code_rewrite_mobius_imports(imports)
 
     # Get the set of mobius aliases (values in alias_mapping)
     mobius_aliases = set(alias_mapping.values())
 
     # Create name mapping
-    forward_mapping, reverse_mapping = mapping_create_name(function_def, imports, mobius_aliases)
+    forward_mapping, reverse_mapping = code_create_name_mapping(function_def, imports, mobius_aliases)
 
     # Create two modules: one with docstring (for display) and one without (for hashing)
     module_with_docstring = ast.Module(body=imports + [function_def], type_ignores=[])
@@ -334,14 +334,14 @@ def ast_normalize(tree: ast.Module, lang: str) -> Tuple[str, str, str, Dict[str,
     # Process both modules identically
     for module in [module_with_docstring, module_without_docstring]:
         # Replace mobius calls with their normalized form
-        module = calls_replace_mobius(module, alias_mapping, forward_mapping)
+        module = code_replace_mobius_calls(module, alias_mapping, forward_mapping)
 
         # Normalize names
         normalizer = ASTNormalizer(forward_mapping)
         normalizer.visit(module)
 
         # Clear locations
-        ast_clear_locations(module)
+        code_clear_locations(module)
 
         # Fix missing locations
         ast.fix_missing_locations(module)
@@ -370,7 +370,7 @@ def hash_compute(code: str, algorithm: str = 'sha256') -> str:
         raise ValueError(f"Unsupported hash algorithm: {algorithm}")
 
 
-def mapping_compute_hash(docstring: str, name_mapping: Dict[str, str],
+def code_compute_mapping_hash(docstring: str, name_mapping: Dict[str, str],
                         alias_mapping: Dict[str, str], comment: str = "") -> str:
     """
     Compute content-addressed hash for a mapping.
@@ -406,7 +406,7 @@ def mapping_compute_hash(docstring: str, name_mapping: Dict[str, str],
     return hash_compute(canonical_json)
 
 
-def schema_detect_version(func_hash: str) -> int:
+def code_detect_schema(func_hash: str) -> int:
     """
     Detect the schema version of a stored function.
 
@@ -419,7 +419,7 @@ def schema_detect_version(func_hash: str) -> int:
     Returns:
         1 for v1 format, None if function not found
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Check for v1 format (function directory with object.json)
     v1_func_dir = pool_dir / func_hash[:2] / func_hash[2:]
@@ -432,7 +432,7 @@ def schema_detect_version(func_hash: str) -> int:
     return None
 
 
-def metadata_create() -> Dict[str, any]:
+def code_create_metadata() -> Dict[str, any]:
     """
     Create default metadata for a function.
 
@@ -457,7 +457,7 @@ def metadata_create() -> Dict[str, any]:
     }
 
 
-def directory_get_mobius() -> Path:
+def storage_get_mobius_directory() -> Path:
     """
     Get the mobius base directory from environment variable or default to '$HOME/.local/mobius/'.
     Environment variable: MOBIUS_DIRECTORY
@@ -477,15 +477,15 @@ def directory_get_mobius() -> Path:
     return Path(home) / '.local' / 'mobius'
 
 
-def directory_get_pool() -> Path:
+def storage_get_pool_directory() -> Path:
     """
     Get the pool directory (git repository) where objects are stored.
     Returns: $MOBIUS_DIRECTORY/pool/
     """
-    return directory_get_mobius() / 'pool'
+    return storage_get_mobius_directory() / 'pool'
 
 
-def config_get_path() -> Path:
+def storage_get_config_path() -> Path:
     """
     Get the path to the config file.
     Config is stored in $MOBIUS_DIRECTORY/config.json
@@ -494,15 +494,15 @@ def config_get_path() -> Path:
     config_override = os.environ.get('MOBIUS_CONFIG_PATH')
     if config_override:
         return Path(config_override)
-    return directory_get_mobius() / 'config.json'
+    return storage_get_mobius_directory() / 'config.json'
 
 
-def config_read() -> Dict[str, any]:
+def storage_read_config() -> Dict[str, any]:
     """
     Read the configuration file.
     Returns default config if file doesn't exist.
     """
-    config_path = config_get_path()
+    config_path = storage_get_config_path()
 
     if not config_path.exists():
         return {
@@ -523,11 +523,11 @@ def config_read() -> Dict[str, any]:
         sys.exit(1)
 
 
-def config_write(config: Dict[str, any]):
+def storage_write_config(config: Dict[str, any]):
     """
     Write the configuration file.
     """
-    config_path = config_get_path()
+    config_path = storage_get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -542,14 +542,14 @@ def command_init():
     """
     Initialize mobius directory and config file.
     """
-    mobius_dir = directory_get_mobius()
+    mobius_dir = storage_get_mobius_directory()
 
     # Create pool directory (git repository for objects)
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
     pool_dir.mkdir(parents=True, exist_ok=True)
 
     # Create config file with defaults
-    config_path = config_get_path()
+    config_path = storage_get_config_path()
     if config_path.exists():
         print(f"Config file already exists: {config_path}")
     else:
@@ -562,7 +562,7 @@ def command_init():
             },
             'remotes': {}
         }
-        config_write(config)
+        storage_write_config(config)
         print(f"Created config file: {config_path}")
 
     print(f"Initialized mobius directory: {mobius_dir}")
@@ -576,7 +576,7 @@ def command_whoami(subcommand: str, value: list = None):
         subcommand: One of 'username', 'email', 'public-key', 'language'
         value: New value(s) to set (None to get current value)
     """
-    config = config_read()
+    config = storage_read_config()
 
     # Map CLI subcommand to config key
     key_map = {
@@ -609,7 +609,7 @@ def command_whoami(subcommand: str, value: list = None):
             # Other fields are strings (take first value)
             config['user'][config_key] = value[0]
 
-        config_write(config)
+        storage_write_config(config)
 
         if subcommand == 'language':
             print(f"Set {subcommand}: {' '.join(value)}")
@@ -617,7 +617,7 @@ def command_whoami(subcommand: str, value: list = None):
             print(f"Set {subcommand}: {value[0]}")
 
 
-def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]):
+def code_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]):
     """
     Save function to mobius directory using schema v1.
 
@@ -630,7 +630,7 @@ def function_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, 
         normalized_code: Normalized code with docstring
         metadata: Metadata dict (created, author)
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Create function directory: pool/XX/YYYYYY.../
     func_dir = pool_dir / hash_value[:2] / hash_value[2:]
@@ -676,10 +676,10 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
     Returns:
         Mapping hash (64-character hex)
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Compute mapping hash
-    mapping_hash = mapping_compute_hash(docstring, name_mapping, alias_mapping, comment)
+    mapping_hash = code_compute_mapping_hash(docstring, name_mapping, alias_mapping, comment)
 
     # Create mapping directory: pool/XX/Y.../lang/ZZ/W.../
     func_dir = pool_dir / func_hash[:2] / func_hash[2:]
@@ -706,7 +706,7 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
     return mapping_hash
 
 
-def function_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
+def code_save(hash_value: str, lang: str, normalized_code: str, docstring: str,
                   name_mapping: Dict[str, str], alias_mapping: Dict[str, str], comment: str = ""):
     """
     Save function to mobius directory using schema v1 (current default).
@@ -723,10 +723,10 @@ def function_save(hash_value: str, lang: str, normalized_code: str, docstring: s
         comment: Optional comment explaining this mapping variant
     """
     # Create metadata
-    metadata = metadata_create()
+    metadata = code_create_metadata()
 
     # Save function (object.json)
-    function_save_v1(hash_value, normalized_code, metadata)
+    code_save_v1(hash_value, normalized_code, metadata)
 
     # Save mapping (mapping.json)
     mapping_save_v1(hash_value, lang, docstring, name_mapping, alias_mapping, comment)
@@ -908,7 +908,7 @@ def git_url_parse(url: str) -> Dict[str, str]:
     return result
 
 
-def remote_type_detect(url: str) -> str:
+def git_detect_remote_type(url: str) -> str:
     """
     Detect the type of remote from URL.
 
@@ -944,7 +944,7 @@ def git_cache_path(remote_name: str) -> Path:
     Returns:
         Path to the cached repository directory
     """
-    mobius_dir = directory_get_mobius()
+    mobius_dir = storage_get_mobius_directory()
     return mobius_dir / 'cache' / 'git' / remote_name
 
 
@@ -1038,14 +1038,14 @@ def command_remote_add(name: str, url: str):
             - git+https://host/user/repo.git (Git HTTPS)
             - git+file:///path/to/repo (Local Git repository)
     """
-    config = config_read()
+    config = storage_read_config()
 
     if name in config['remotes']:
         print(f"Error: Remote '{name}' already exists", file=sys.stderr)
         sys.exit(1)
 
     # Detect remote type
-    remote_type = remote_type_detect(url)
+    remote_type = git_detect_remote_type(url)
 
     if remote_type == 'unknown':
         print(f"Error: Invalid URL format: {url}", file=sys.stderr)
@@ -1061,7 +1061,7 @@ def command_remote_add(name: str, url: str):
         'type': remote_type
     }
 
-    config_write(config)
+    storage_write_config(config)
     print(f"Added remote '{name}': {url} (type: {remote_type})")
 
 
@@ -1072,14 +1072,14 @@ def command_remote_remove(name: str):
     Args:
         name: Remote name to remove
     """
-    config = config_read()
+    config = storage_read_config()
 
     if name not in config['remotes']:
         print(f"Error: Remote '{name}' not found", file=sys.stderr)
         sys.exit(1)
 
     del config['remotes'][name]
-    config_write(config)
+    storage_write_config(config)
     print(f"Removed remote '{name}'")
 
 
@@ -1087,7 +1087,7 @@ def command_remote_list():
     """
     List all configured remotes.
     """
-    config = config_read()
+    config = storage_read_config()
 
     if not config['remotes']:
         print("No remotes configured")
@@ -1107,7 +1107,7 @@ def command_remote_pull(name: str):
     """
     import shutil
 
-    config = config_read()
+    config = storage_read_config()
 
     if name not in config['remotes']:
         print(f"Error: Remote '{name}' not found", file=sys.stderr)
@@ -1115,7 +1115,7 @@ def command_remote_pull(name: str):
 
     remote = config['remotes'][name]
     url = remote['url']
-    remote_type = remote.get('type', remote_type_detect(url))
+    remote_type = remote.get('type', git_detect_remote_type(url))
 
     print(f"Pulling from remote '{name}': {url}")
     print()
@@ -1129,7 +1129,7 @@ def command_remote_pull(name: str):
             sys.exit(1)
 
         # Copy functions from remote to local pool
-        local_pool = directory_get_pool()
+        local_pool = storage_get_pool_directory()
         local_objects = local_pool
         remote_objects = remote_path
 
@@ -1161,7 +1161,7 @@ def command_remote_pull(name: str):
             sys.exit(1)
 
         # Copy functions from cached repository to local pool
-        local_pool = directory_get_pool()
+        local_pool = storage_get_pool_directory()
         local_objects = local_pool
         remote_objects = cache_path
 
@@ -1198,7 +1198,7 @@ def command_remote_push(name: str):
     """
     import shutil
 
-    config = config_read()
+    config = storage_read_config()
 
     if name not in config['remotes']:
         print(f"Error: Remote '{name}' not found", file=sys.stderr)
@@ -1206,7 +1206,7 @@ def command_remote_push(name: str):
 
     remote = config['remotes'][name]
     url = remote['url']
-    remote_type = remote.get('type', remote_type_detect(url))
+    remote_type = remote.get('type', git_detect_remote_type(url))
 
     print(f"Pushing to remote '{name}': {url}")
     print()
@@ -1219,7 +1219,7 @@ def command_remote_push(name: str):
         remote_path.mkdir(parents=True, exist_ok=True)
 
         # Copy functions from local pool to remote
-        local_pool = directory_get_pool()
+        local_pool = storage_get_pool_directory()
         local_objects = local_pool
         remote_objects = remote_path
 
@@ -1252,7 +1252,7 @@ def command_remote_push(name: str):
             sys.exit(1)
 
         # Copy functions from local pool to cached repository
-        local_pool = directory_get_pool()
+        local_pool = storage_get_pool_directory()
         local_objects = local_pool
         remote_objects = cache_path
 
@@ -1290,7 +1290,7 @@ def command_remote_push(name: str):
         sys.exit(1)
 
 
-def dependencies_extract(normalized_code: str) -> List[str]:
+def code_extract_dependencies(normalized_code: str) -> List[str]:
     """
     Extract mobius dependencies from normalized code.
 
@@ -1314,7 +1314,7 @@ def dependencies_extract(normalized_code: str) -> List[str]:
     return dependencies
 
 
-def dependencies_resolve(func_hash: str) -> List[str]:
+def code_resolve_dependencies(func_hash: str) -> List[str]:
     """
     Resolve all dependencies transitively and return them in topological order.
 
@@ -1336,16 +1336,16 @@ def dependencies_resolve(func_hash: str) -> List[str]:
         visited.add(hash_value)
 
         # Detect version and load function data
-        version = schema_detect_version(hash_value)
+        version = code_detect_schema(hash_value)
         if version is None:
             raise ValueError(f"Function not found: {hash_value}")
 
         # Load function to get its code (v1 only)
-        func_data = function_load_v1(hash_value)
+        func_data = code_load_v1(hash_value)
         normalized_code = func_data['normalized_code']
 
         # Extract and visit dependencies first
-        deps = dependencies_extract(normalized_code)
+        deps = code_extract_dependencies(normalized_code)
         for dep in deps:
             visit(dep)
 
@@ -1356,7 +1356,7 @@ def dependencies_resolve(func_hash: str) -> List[str]:
     return resolved
 
 
-def dependencies_bundle(hashes: List[str], output_dir: Path) -> Path:
+def code_bundle_dependencies(hashes: List[str], output_dir: Path) -> Path:
     """
     Bundle function files to an output directory.
 
@@ -1371,13 +1371,13 @@ def dependencies_bundle(hashes: List[str], output_dir: Path) -> Path:
     """
     import shutil
 
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
     output_dir = Path(output_dir)
     output_objects = output_dir
     output_objects.mkdir(parents=True, exist_ok=True)
 
     for func_hash in hashes:
-        version = schema_detect_version(func_hash)
+        version = code_detect_schema(func_hash)
         if version is None:
             raise ValueError(f"Function not found: {func_hash}")
 
@@ -1406,7 +1406,7 @@ def command_review(hash_value: str):
         sys.exit(1)
 
     # Get user's preferred languages
-    config = config_read()
+    config = storage_read_config()
     preferred_langs = config['user'].get('languages', ['eng'])
 
     if not preferred_langs:
@@ -1429,7 +1429,7 @@ def command_review(hash_value: str):
         visited.add(current_hash)
 
         # Detect schema version
-        version = schema_detect_version(current_hash)
+        version = code_detect_schema(current_hash)
         if version is None:
             print(f"Warning: Function {current_hash} not found in local pool", file=sys.stderr)
             continue
@@ -1438,7 +1438,7 @@ def command_review(hash_value: str):
         loaded = False
         for lang in preferred_langs:
             try:
-                normalized_code, name_mapping, alias_mapping, docstring = function_load(current_hash, lang)
+                normalized_code, name_mapping, alias_mapping, docstring = code_load(current_hash, lang)
                 func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
                 # Show function
@@ -1447,13 +1447,13 @@ def command_review(hash_value: str):
                 print("-" * 80)
 
                 # Denormalize and show code
-                normalized_code_with_doc = docstring_replace(normalized_code, docstring)
+                normalized_code_with_doc = code_replace_docstring(normalized_code, docstring)
                 original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
                 print(original_code)
                 print()
 
                 # Extract dependencies
-                deps = dependencies_extract(normalized_code)
+                deps = code_extract_dependencies(normalized_code)
                 if deps:
                     print(f"Dependencies: {len(deps)}")
                     for dep in deps:
@@ -1484,7 +1484,7 @@ def command_log():
 
     Lists all functions with metadata (timestamp, author, hash).
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     if not pool_dir.exists():
         print("No functions in pool")
@@ -1563,7 +1563,7 @@ def command_search(query: List[str]):
 
     search_terms = [term.lower() for term in query]
 
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     if not pool_dir.exists():
         print("No functions in pool")
@@ -1601,7 +1601,7 @@ def command_search(query: List[str]):
                             if lang_dir.is_dir() and len(lang_dir.name) == 3:
                                 lang = lang_dir.name
                                 try:
-                                    _, name_mapping, _, docstring = function_load(func_hash, lang)
+                                    _, name_mapping, _, docstring = code_load(func_hash, lang)
                                     func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
                                     # Check if search term in function name or docstring
@@ -1671,7 +1671,7 @@ def code_strip_mobius_imports(code: str) -> str:
     return ast.unparse(tree)
 
 
-def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, loaded: set = None):
+def code_load_dependencies_recursive(func_hash: str, lang: str, namespace: dict, loaded: set = None):
     """
     Recursively load a function and all its dependencies into a namespace.
 
@@ -1699,18 +1699,18 @@ def dependencies_load_recursive(func_hash: str, lang: str, namespace: dict, load
 
     # Load the function
     try:
-        normalized_code, name_mapping, alias_mapping, docstring = function_load(func_hash, lang)
+        normalized_code, name_mapping, alias_mapping, docstring = code_load(func_hash, lang)
     except SystemExit:
         print(f"Error: Could not load dependency {func_hash}@{lang}", file=sys.stderr)
         sys.exit(1)
 
     # First, recursively load all dependencies (deps are actual hashes without prefix)
-    deps = dependencies_extract(normalized_code)
+    deps = code_extract_dependencies(normalized_code)
     for dep_hash in deps:
-        dependencies_load_recursive(dep_hash, lang, namespace, loaded)
+        code_load_dependencies_recursive(dep_hash, lang, namespace, loaded)
 
     # Denormalize the code
-    normalized_code_with_doc = docstring_replace(normalized_code, docstring)
+    normalized_code_with_doc = code_replace_docstring(normalized_code, docstring)
     original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
 
     # Strip mobius imports (dependencies are already in namespace)
@@ -1783,7 +1783,7 @@ def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None
 
     # Load function from pool
     try:
-        normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang)
+        normalized_code, name_mapping, alias_mapping, docstring = code_load(hash_value, lang)
     except SystemExit:
         print(f"Error: Could not load function {hash_value}@{lang}", file=sys.stderr)
         sys.exit(1)
@@ -1795,15 +1795,15 @@ def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None
     namespace = {}
 
     # First, load all dependencies recursively
-    deps = dependencies_extract(normalized_code)
+    deps = code_extract_dependencies(normalized_code)
     if deps:
         print(f"Loading {len(deps)} dependencies...")
         for dep_hash in deps:
-            dependencies_load_recursive(dep_hash, lang, namespace, set())
+            code_load_dependencies_recursive(dep_hash, lang, namespace, set())
         print()
 
     # Denormalize to original language
-    normalized_code_with_doc = docstring_replace(normalized_code, docstring)
+    normalized_code_with_doc = code_replace_docstring(normalized_code, docstring)
     original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
 
     print(f"Running function: {func_name} ({lang})")
@@ -1924,7 +1924,7 @@ def command_translate(hash_with_lang: str, target_lang: str):
 
     # Load source function
     try:
-        normalized_code, name_mapping_source, alias_mapping_source, docstring_source = function_load(hash_value, source_lang)
+        normalized_code, name_mapping_source, alias_mapping_source, docstring_source = code_load(hash_value, source_lang)
     except SystemExit:
         print(f"Error: Could not load function {hash_value}@{source_lang}", file=sys.stderr)
         sys.exit(1)
@@ -1932,7 +1932,7 @@ def command_translate(hash_with_lang: str, target_lang: str):
     # Show source code for reference
     print(f"Source function ({source_lang}):")
     print("=" * 60)
-    normalized_code_with_doc = docstring_replace(normalized_code, docstring_source)
+    normalized_code_with_doc = code_replace_docstring(normalized_code, docstring_source)
     source_code = code_denormalize(normalized_code_with_doc, name_mapping_source, alias_mapping_source)
     print(source_code)
     print("=" * 60)
@@ -1974,7 +1974,7 @@ def command_translate(hash_with_lang: str, target_lang: str):
     print(f"View with: mobius.py show {hash_value}@{target_lang}")
 
 
-def function_add(file_path_with_lang: str, comment: str = ""):
+def code_add(file_path_with_lang: str, comment: str = ""):
     """
     Add a function to the mobius pool using schema v1.
 
@@ -2011,7 +2011,7 @@ def function_add(file_path_with_lang: str, comment: str = ""):
 
     # Normalize the AST
     try:
-        normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping = ast_normalize(tree, lang)
+        normalized_code_with_docstring, normalized_code_without_docstring, docstring, name_mapping, alias_mapping = code_normalize(tree, lang)
     except Exception as e:
         print(f"Error: Failed to normalize AST: {e}", file=sys.stderr)
         sys.exit(1)
@@ -2020,10 +2020,10 @@ def function_add(file_path_with_lang: str, comment: str = ""):
     hash_value = hash_compute(normalized_code_without_docstring)
 
     # Save to v1 format (store the version WITH docstring for display purposes)
-    function_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping, comment)
+    code_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping, comment)
 
 
-def docstring_replace(code: str, new_docstring: str) -> str:
+def code_replace_docstring(code: str, new_docstring: str) -> str:
     """
     Replace the docstring in a function with a new one.
     If new_docstring is empty, remove the docstring.
@@ -2064,7 +2064,7 @@ def docstring_replace(code: str, new_docstring: str) -> str:
     return ast.unparse(tree)
 
 
-def function_load_v1(hash_value: str) -> Dict[str, any]:
+def code_load_v1(hash_value: str) -> Dict[str, any]:
     """
     Load function from mobius directory using schema v1.
 
@@ -2076,7 +2076,7 @@ def function_load_v1(hash_value: str) -> Dict[str, any]:
     Returns:
         Dictionary with schema_version, hash, normalized_code, metadata
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Build path: pool/XX/YYYYYY.../object.json
     func_dir = pool_dir / hash_value[:2] / hash_value[2:]
@@ -2111,7 +2111,7 @@ def mappings_list_v1(func_hash: str, lang: str) -> list:
     Returns:
         List of (mapping_hash, comment) tuples
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Build path: pool/XX/YYYYYY.../lang/
     func_dir = pool_dir / func_hash[:2] / func_hash[2:]
@@ -2167,7 +2167,7 @@ def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str) -> Tuple[str, 
     Returns:
         Tuple of (docstring, name_mapping, alias_mapping, comment)
     """
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Build path: pool/XX/Y.../lang/ZZ/W.../mapping.json
     func_dir = pool_dir / func_hash[:2] / func_hash[2:]
@@ -2195,7 +2195,7 @@ def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str) -> Tuple[str, 
     return docstring, name_mapping, alias_mapping, comment
 
 
-def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
+def code_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple[str, Dict[str, str], Dict[str, str], str]:
     """
     Load a function from the mobius pool (v1 format only).
 
@@ -2208,7 +2208,7 @@ def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple
         Tuple of (normalized_code, name_mapping, alias_mapping, docstring)
     """
     # Detect schema version
-    version = schema_detect_version(hash_value)
+    version = code_detect_schema(hash_value)
 
     if version is None:
         print(f"Error: Function not found: {hash_value}", file=sys.stderr)
@@ -2216,7 +2216,7 @@ def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple
 
     # Load v1 format
     # Load object.json
-    func_data = function_load_v1(hash_value)
+    func_data = code_load_v1(hash_value)
     normalized_code = func_data['normalized_code']
 
     # Get available mappings
@@ -2245,7 +2245,7 @@ def function_load(hash_value: str, lang: str, mapping_hash: str = None) -> Tuple
     return normalized_code, name_mapping, alias_mapping, docstring
 
 
-def function_show(hash_with_lang_and_mapping: str):
+def code_show(hash_with_lang_and_mapping: str):
     """
     Show a function from the mobius pool with mapping selection support.
 
@@ -2281,7 +2281,7 @@ def function_show(hash_with_lang_and_mapping: str):
         sys.exit(1)
 
     # Detect schema version
-    version = schema_detect_version(hash_value)
+    version = code_detect_schema(hash_value)
     if version is None:
         print(f"Error: Function not found: {hash_value}", file=sys.stderr)
         sys.exit(1)
@@ -2309,11 +2309,11 @@ def function_show(hash_with_lang_and_mapping: str):
         return
 
     # Load the selected mapping
-    normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang, mapping_hash=selected_hash)
+    normalized_code, name_mapping, alias_mapping, docstring = code_load(hash_value, lang, mapping_hash=selected_hash)
 
     # Replace docstring and denormalize
     try:
-        normalized_code = docstring_replace(normalized_code, docstring)
+        normalized_code = code_replace_docstring(normalized_code, docstring)
         original_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
     except Exception as e:
         print(f"Error: Failed to denormalize code: {e}", file=sys.stderr)
@@ -2323,7 +2323,7 @@ def function_show(hash_with_lang_and_mapping: str):
     print(original_code)
 
 
-def function_get(hash_with_lang: str):
+def code_get(hash_with_lang: str):
     """Get a function from the mobius pool (backward compatible with show command)"""
     # Parse the hash and language
     if '@' not in hash_with_lang:
@@ -2343,11 +2343,11 @@ def function_get(hash_with_lang: str):
         sys.exit(1)
 
     # Load function data from pool
-    normalized_code, name_mapping, alias_mapping, docstring = function_load(hash_value, lang)
+    normalized_code, name_mapping, alias_mapping, docstring = code_load(hash_value, lang)
 
     # Replace the docstring with the language-specific one
     try:
-        normalized_code = docstring_replace(normalized_code, docstring)
+        normalized_code = code_replace_docstring(normalized_code, docstring)
     except Exception as e:
         print(f"Error: Failed to replace docstring: {e}", file=sys.stderr)
         sys.exit(1)
@@ -2379,7 +2379,7 @@ def schema_validate_v1(func_hash: str) -> tuple:
         Tuple of (is_valid, errors) where errors is a list of error messages
     """
     errors = []
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     # Check object.json exists
     func_dir = pool_dir / func_hash[:2] / func_hash[2:]
@@ -2445,12 +2445,12 @@ def command_caller(hash_value: str):
         sys.exit(1)
 
     # Check if function exists
-    version = schema_detect_version(hash_value)
+    version = code_detect_schema(hash_value)
     if version is None:
         print(f"Error: Function not found: {hash_value}", file=sys.stderr)
         sys.exit(1)
 
-    pool_dir = directory_get_pool()
+    pool_dir = storage_get_pool_directory()
 
     if not pool_dir.exists():
         return
@@ -2479,7 +2479,7 @@ def command_caller(hash_value: str):
                     normalized_code = data['normalized_code']
 
                     # Check if this function depends on the target hash
-                    deps = dependencies_extract(normalized_code)
+                    deps = code_extract_dependencies(normalized_code)
                     if hash_value in deps:
                         callers.append(func_hash)
                 except (IOError, json.JSONDecodeError):
@@ -2510,30 +2510,30 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
             sys.exit(1)
 
     # Check if what function exists
-    what_version = schema_detect_version(what_hash)
+    what_version = code_detect_schema(what_hash)
     if what_version is None:
         print(f"Error: Function not found: {what_hash}", file=sys.stderr)
         sys.exit(1)
 
     # Check if to function exists
-    to_version = schema_detect_version(to_hash)
+    to_version = code_detect_schema(to_hash)
     if to_version is None:
         print(f"Error: Target function not found: {to_hash}", file=sys.stderr)
         sys.exit(1)
 
     # Load the function's normalized code (v1 only)
-    func_data = function_load_v1(what_hash)
+    func_data = code_load_v1(what_hash)
     normalized_code = func_data['normalized_code']
     # Get all languages from v1 directory structure
-    pool_dir = directory_get_pool()
-    func_dir = pool_dir / what_hash[:2] / what_hash[2:]
+    pool_dir = storage_get_pool_directory()
+    func_dir = pool_dir / 'sha256' / what_hash[:2] / what_hash[2:]
     languages = []
     for item in func_dir.iterdir():
         if item.is_dir() and len(item.name) == 3:
             languages.append(item.name)
 
     # Check that the function actually depends on from_hash
-    deps = dependencies_extract(normalized_code)
+    deps = code_extract_dependencies(normalized_code)
     if from_hash not in deps:
         print(f"Error: Function {what_hash} does not depend on {from_hash}", file=sys.stderr)
         sys.exit(1)
@@ -2588,7 +2588,7 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
     new_tree = ast.parse(new_normalized_code)
     for node in new_tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _, func_without_docstring = docstring_extract(node)
+            _, func_without_docstring = code_extract_docstring(node)
             # Rebuild module without docstring for hashing
             imports = [n for n in new_tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
             module_without_docstring = ast.Module(body=imports + [func_without_docstring], type_ignores=[])
@@ -2599,10 +2599,10 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
     new_hash = hash_compute(code_without_docstring)
 
     # Create metadata for the new function
-    metadata = metadata_create()
+    metadata = code_create_metadata()
 
     # Save the new function (object.json)
-    function_save_v1(new_hash, new_normalized_code, metadata)
+    code_save_v1(new_hash, new_normalized_code, metadata)
 
     # Copy all language mappings from what_hash to new_hash (v1 only)
     for lang in languages:
@@ -2643,20 +2643,20 @@ def compile_generate_config(func_hash: str, lang: str, output_name: str) -> str:
     return f'''# PyOxidizer configuration for {output_name}
 # Generated by mobius.py compile
 
-def make_dist():
+def compile_create_dist():
     return default_python_distribution()
 
-def make_exe(dist):
+def compile_create_exe(dist):
     python_config = dist.make_python_interpreter_config()
     python_config.run_command = """
 import sys
 sys.path.insert(0, '.')
 
 # Import mobius runtime
-from mobius_runtime import execute_function
+from mobius_runtime import code_execute
 
 # Execute the function
-result = execute_function('{func_hash}', '{lang}', sys.argv[1:])
+result = code_execute('{func_hash}', '{lang}', sys.argv[1:])
 if result is not None:
     print(result)
 """
@@ -2673,18 +2673,18 @@ if result is not None:
 
     return exe
 
-def make_embedded_resources(exe):
+def compile_embed_resources(exe):
     return exe.to_embedded_resources()
 
-def make_install(exe):
+def compile_install(exe):
     files = FileManifest()
     files.add_python_resource(".", exe)
     return files
 
-register_target("dist", make_dist)
-register_target("exe", make_exe, depends=["dist"])
-register_target("resources", make_embedded_resources, depends=["exe"], default_build_script=True)
-register_target("install", make_install, depends=["exe"], default=True)
+register_target("dist", compile_create_dist)
+register_target("exe", compile_create_exe, depends=["dist"])
+register_target("resources", compile_embed_resources, depends=["exe"], default_build_script=True)
+register_target("install", compile_install, depends=["exe"], default=True)
 
 resolve_targets()
 '''
@@ -2719,17 +2719,17 @@ from pathlib import Path
 MOBIUS_IMPORT_PREFIX = "object_"
 
 
-def directory_get_bundle() -> Path:
+def storage_get_bundle_directory() -> Path:
     """Get the bundled objects directory."""
     # When compiled, objects are bundled alongside the executable
     exe_dir = Path(sys.executable).parent
     return exe_dir / 'bundle'
 
 
-def function_load_v1(hash_value: str):
+def code_load_v1(hash_value: str):
     """Load function from v1 format."""
-    bundle_dir = directory_get_bundle()
-    func_dir = bundle_dir / hash_value[:2] / hash_value[2:]
+    bundle_dir = storage_get_bundle_directory()
+    func_dir = bundle_dir / 'sha256' / hash_value[:2] / hash_value[2:]
     object_path = func_dir / 'object.json'
 
     if not object_path.exists():
@@ -2741,9 +2741,9 @@ def function_load_v1(hash_value: str):
 
 def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str):
     """Load mapping from v1 format."""
-    bundle_dir = directory_get_bundle()
-    mapping_path = (bundle_dir / func_hash[:2] / func_hash[2:] /
-                   lang / mapping_hash[:2] / mapping_hash[2:] / 'mapping.json')
+    bundle_dir = storage_get_bundle_directory()
+    mapping_path = (bundle_dir / 'sha256' / func_hash[:2] / func_hash[2:] /
+                   lang / 'sha256' / mapping_hash[:2] / mapping_hash[2:] / 'mapping.json')
 
     with open(mapping_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -2758,8 +2758,8 @@ def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str):
 
 def mappings_list_v1(func_hash: str, lang: str):
     """List mappings for a function in a language."""
-    bundle_dir = directory_get_bundle()
-    lang_dir = bundle_dir / func_hash[:2] / func_hash[2:] / lang
+    bundle_dir = storage_get_bundle_directory()
+    lang_dir = bundle_dir / 'sha256' / func_hash[:2] / func_hash[2:] / lang / 'sha256'
 
     if not lang_dir.exists():
         return []
@@ -2779,9 +2779,9 @@ def mappings_list_v1(func_hash: str, lang: str):
     return mappings
 
 
-def function_load(hash_value: str, lang: str, mapping_hash: str = None):
+def code_load(hash_value: str, lang: str, mapping_hash: str = None):
     """Load function with language mapping."""
-    func_data = function_load_v1(hash_value)
+    func_data = code_load_v1(hash_value)
     normalized_code = func_data['normalized_code']
 
     mappings = mappings_list_v1(hash_value, lang)
@@ -2833,9 +2833,9 @@ def code_denormalize(normalized_code: str, name_mapping: dict, alias_mapping: di
     return ast.unparse(tree)
 
 
-def execute_function(func_hash: str, lang: str, args: list):
+def code_execute(func_hash: str, lang: str, args: list):
     """Execute a function from the bundle."""
-    normalized_code, name_mapping, alias_mapping, docstring = function_load(func_hash, lang)
+    normalized_code, name_mapping, alias_mapping, docstring = code_load(func_hash, lang)
     denormalized_code = code_denormalize(normalized_code, name_mapping, alias_mapping)
 
     # Execute the function
@@ -2905,7 +2905,7 @@ def command_compile(hash_with_lang: str, output_path: str = None):
         sys.exit(1)
 
     # Check if function exists
-    version = schema_detect_version(func_hash)
+    version = code_detect_schema(func_hash)
     if version is None:
         print(f"Error: Function not found: {func_hash}", file=sys.stderr)
         sys.exit(1)
@@ -2923,7 +2923,7 @@ def command_compile(hash_with_lang: str, output_path: str = None):
     # Resolve dependencies
     print("Resolving dependencies...")
     try:
-        deps = dependencies_resolve(func_hash)
+        deps = code_resolve_dependencies(func_hash)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -2938,7 +2938,7 @@ def command_compile(hash_with_lang: str, output_path: str = None):
         # Bundle dependencies
         print("Bundling functions...")
         bundle_dir = build_dir / 'bundle'
-        dependencies_bundle(deps, bundle_dir)
+        code_bundle_dependencies(deps, bundle_dir)
 
         # Generate runtime
         print("Generating runtime...")
@@ -3087,11 +3087,11 @@ def main():
     elif args.command == 'whoami':
         command_whoami(args.subcommand, args.value)
     elif args.command == 'add':
-        function_add(args.file, args.comment)
+        code_add(args.file, args.comment)
     elif args.command == 'get':
-        function_get(args.hash)
+        code_get(args.hash)
     elif args.command == 'show':
-        function_show(args.hash)
+        code_show(args.hash)
     elif args.command == 'translate':
         command_translate(args.hash, args.target_lang)
     elif args.command == 'run':
