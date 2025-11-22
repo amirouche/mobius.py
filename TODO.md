@@ -11,7 +11,6 @@
 - `log`: thoroughly review output formatting and metadata display
 - `search`: thoroughly review query parsing and result ranking
 - `compile`: thoroughly review build process and dependency bundling
-- `compile`: drop --output flag, use a.out or a.out.exe as default output
 - `translate`: add Spanish translation for add function (d6ecfc90...)
 - `translate`: add Spanish translation for twice function (28cdad41...)
 - `review`: make interactive, request explicit ack for security/correctness, one function at a time starting from lowest level, remember reviewed functions
