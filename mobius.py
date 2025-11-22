@@ -173,12 +173,18 @@ def code_create_name_mapping(function_def: Union[ast.FunctionDef, ast.AsyncFunct
     counter += 1
 
     # Collect all names in the function (excluding imported names, built-ins, and mobius aliases)
+    # Use a set to track seen names and avoid duplicates
+    seen_names = set()
     all_names = list()
     for node in ast.walk(function_def):
         if isinstance(node, ast.Name) and node.id not in imported_names and node.id not in PYTHON_BUILTINS and node.id not in mobius_aliases:
-            all_names.append(node.id)
+            if node.id not in seen_names:
+                seen_names.add(node.id)
+                all_names.append(node.id)
         elif isinstance(node, ast.arg) and node.arg not in imported_names and node.arg not in PYTHON_BUILTINS and node.arg not in mobius_aliases:
-            all_names.append(node.arg)
+            if node.arg not in seen_names:
+                seen_names.add(node.arg)
+                all_names.append(node.arg)
 
     # XXX: all_names: do not sort, keep the order ast traversal
     # discovery.
@@ -1408,12 +1414,51 @@ def code_bundle_dependencies(hashes: List[str], output_dir: Path) -> Path:
     return output_dir
 
 
+def review_load_state() -> set:
+    """
+    Load the set of previously reviewed function hashes.
+
+    Returns:
+        Set of reviewed function hashes
+    """
+    mobius_dir = storage_get_mobius_directory()
+    state_file = mobius_dir / 'review_state.json'
+
+    if not state_file.exists():
+        return set()
+
+    try:
+        with open(state_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return set(data.get('reviewed', []))
+    except (json.JSONDecodeError, OSError):
+        return set()
+
+
+def review_save_state(reviewed: set):
+    """
+    Save the set of reviewed function hashes.
+
+    Args:
+        reviewed: Set of reviewed function hashes
+    """
+    mobius_dir = storage_get_mobius_directory()
+    mobius_dir.mkdir(parents=True, exist_ok=True)
+
+    state_file = mobius_dir / 'review_state.json'
+    data = {'reviewed': list(reviewed)}
+
+    with open(state_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+
 def command_review(hash_value: str):
     """
-    Recursively review a function and its dependencies.
+    Interactively review a function and its dependencies.
 
-    Shows the function and all functions it depends on (recursively)
-    in the user's preferred languages.
+    Reviews functions one at a time starting from lowest-level dependencies.
+    Requires explicit acknowledgment for security/correctness.
+    Remembers reviewed functions across invocations.
 
     Args:
         hash_value: Function hash to review
@@ -1430,22 +1475,36 @@ def command_review(hash_value: str):
     if not preferred_langs:
         preferred_langs = ['eng']
 
-    # Track visited functions to avoid cycles
-    visited = set()
-    review_queue = [hash_value]
+    # Load previously reviewed functions
+    reviewed = review_load_state()
 
-    print("Function Review")
+    # Resolve all dependencies (returns list with dependencies first, main function last)
+    try:
+        all_deps = code_resolve_dependencies(hash_value)
+    except ValueError as e:
+        print(f"Error resolving dependencies: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Filter out already reviewed functions
+    to_review = [h for h in all_deps if h not in reviewed]
+
+    if not to_review:
+        print("All functions in this dependency tree have already been reviewed.")
+        print(f"Total reviewed: {len(reviewed)} function(s)")
+        print("\nTo reset review state, delete: ~/.local/mobius/review_state.json")
+        return
+
+    print("Interactive Function Review")
+    print("=" * 80)
+    print(f"Functions to review: {len(to_review)}")
+    print(f"Already reviewed: {len(all_deps) - len(to_review)}")
+    print()
+    print("For each function, review the code for security and correctness.")
+    print("Press 'y' to approve, 'n' to skip, 'q' to quit.")
     print("=" * 80)
     print()
 
-    while review_queue:
-        current_hash = review_queue.pop(0)
-
-        if current_hash in visited:
-            continue
-
-        visited.add(current_hash)
-
+    for i, current_hash in enumerate(to_review):
         # Detect schema version
         version = code_detect_schema(current_hash)
         if version is None:
@@ -1459,8 +1518,8 @@ def command_review(hash_value: str):
                 normalized_code, name_mapping, alias_mapping, docstring = code_load(current_hash, lang)
                 func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
-                # Show function
-                print(f"Function: {func_name} ({lang})")
+                # Show function header
+                print(f"[{i+1}/{len(to_review)}] Function: {func_name} ({lang})")
                 print(f"Hash: {current_hash}")
                 print("-" * 80)
 
@@ -1468,22 +1527,19 @@ def command_review(hash_value: str):
                 normalized_code_with_doc = code_replace_docstring(normalized_code, docstring)
                 original_code = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
                 print(original_code)
-                print()
+                print("-" * 80)
 
                 # Extract dependencies
                 deps = code_extract_dependencies(normalized_code)
                 if deps:
                     print(f"Dependencies: {len(deps)}")
                     for dep in deps:
-                        print(f"  - {dep}")
-                        if dep not in visited:
-                            review_queue.append(dep)
+                        status = "✓" if dep in reviewed else "pending"
+                        print(f"  - {dep[:12]}... [{status}]")
                 else:
                     print("Dependencies: None")
 
-                print("=" * 80)
                 print()
-
                 loaded = True
                 break
             except SystemExit:
@@ -1494,6 +1550,37 @@ def command_review(hash_value: str):
             print(f"Warning: Function {current_hash} not available in any preferred language", file=sys.stderr)
             print(f"Preferred languages: {', '.join(preferred_langs)}", file=sys.stderr)
             print()
+            continue
+
+        # Interactive prompt
+        while True:
+            try:
+                response = input("Approve this function? [y/n/q]: ").strip().lower()
+            except EOFError:
+                print("\nNon-interactive mode - skipping remaining reviews.")
+                review_save_state(reviewed)
+                return
+
+            if response == 'y':
+                reviewed.add(current_hash)
+                review_save_state(reviewed)
+                print(f"✓ Function approved and saved to review state.\n")
+                break
+            elif response == 'n':
+                print(f"✗ Function skipped.\n")
+                break
+            elif response == 'q':
+                print(f"\nReview paused. Progress saved ({len(reviewed)} functions reviewed).")
+                print("Run the command again to continue from where you left off.")
+                return
+            else:
+                print("Invalid input. Please enter 'y', 'n', or 'q'.")
+
+        print("=" * 80)
+        print()
+
+    print("Review complete!")
+    print(f"Total reviewed: {len(reviewed)} function(s)")
 
 
 def command_log():
@@ -1770,34 +1857,70 @@ def code_load_dependencies_recursive(func_hash: str, lang: str, namespace: dict,
     return namespace.get(func_name)
 
 
+def storage_list_languages(func_hash: str) -> list:
+    """
+    List available languages for a function hash.
+
+    Args:
+        func_hash: Function hash (64 hex characters)
+
+    Returns:
+        List of language codes available for this function
+    """
+    pool_dir = storage_get_pool_directory()
+    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
+
+    if not func_dir.exists():
+        return []
+
+    languages = []
+    for item in func_dir.iterdir():
+        if item.is_dir() and len(item.name) >= 3 and len(item.name) <= 256:
+            languages.append(item.name)
+
+    return sorted(languages)
+
+
 def command_run(hash_with_lang: str, debug: bool = False, func_args: list = None):
     """
     Execute a function from the pool interactively.
 
     Args:
-        hash_with_lang: Function hash with language (e.g., "abc123...@eng")
+        hash_with_lang: Function hash with optional language (e.g., "abc123..." or "abc123...@eng")
+                       Language is required when --debug is set, optional otherwise.
         debug: If True, run with debugger (pdb)
         func_args: Arguments to pass to the function (after --)
     """
     if func_args is None:
         func_args = []
 
-    # Parse hash and language
-    if '@' not in hash_with_lang:
-        print("Error: Missing language suffix. Use format: HASH@lang", file=sys.stderr)
-        sys.exit(1)
-
-    hash_value, lang = hash_with_lang.rsplit('@', 1)
-
-    # Validate language code
-    if len(lang) < 3 or len(lang) > 256:
-        print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
-        sys.exit(1)
+    # Parse hash and optional language
+    if '@' in hash_with_lang:
+        hash_value, lang = hash_with_lang.rsplit('@', 1)
+        # Validate language code
+        if len(lang) < 3 or len(lang) > 256:
+            print(f"Error: Language code must be 3-256 characters. Got: {lang}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        hash_value = hash_with_lang
+        lang = None
 
     # Validate hash format
     if len(hash_value) != 64 or not all(c in '0123456789abcdef' for c in hash_value.lower()):
         print(f"Error: Invalid hash format. Expected 64 hex characters. Got: {hash_value}", file=sys.stderr)
         sys.exit(1)
+
+    # If no language provided, find first available
+    if lang is None:
+        if debug:
+            print("Error: Language suffix required when using --debug. Use format: HASH@lang", file=sys.stderr)
+            sys.exit(1)
+
+        available_langs = storage_list_languages(hash_value)
+        if not available_langs:
+            print(f"Error: No language mappings found for function {hash_value}", file=sys.stderr)
+            sys.exit(1)
+        lang = available_langs[0]  # Use first available language
 
     # Load function from pool
     try:
@@ -1985,9 +2108,11 @@ def command_translate(hash_with_lang: str, target_lang: str):
     comment = input("Optional comment for this translation (press Enter to skip): ").strip()
 
     # Save the translation
-    mapping_save_v1(hash_value, target_lang, target_docstring, name_mapping_target, alias_mapping_target, comment)
+    mapping_hash = mapping_save_v1(hash_value, target_lang, target_docstring, name_mapping_target, alias_mapping_target, comment)
 
+    print(f"Mapping hash: {mapping_hash}")
     print()
+    print(f"Translation saved successfully!")
     print(f"View with: mobius.py show {hash_value}@{target_lang}")
 
 
@@ -2032,6 +2157,22 @@ def code_add(file_path_with_lang: str, comment: str = ""):
     except Exception as e:
         print(f"Error: Failed to normalize AST: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Verify all mobius imports resolve to objects in the local pool
+    if alias_mapping:
+        pool_dir = storage_get_pool_directory()
+        missing_deps = []
+        for dep_hash, alias in alias_mapping.items():
+            dep_dir = pool_dir / dep_hash[:2] / dep_hash[2:]
+            if not (dep_dir / 'object.json').exists():
+                missing_deps.append((dep_hash, alias))
+
+        if missing_deps:
+            print("Error: The following mobius imports do not exist in the local pool:", file=sys.stderr)
+            for dep_hash, alias in missing_deps:
+                print(f"  - {alias} (hash: {dep_hash[:12]}...)", file=sys.stderr)
+            print("\nPlease add these functions to the pool first, or pull them from a remote.", file=sys.stderr)
+            sys.exit(1)
 
     # Compute hash on code WITHOUT docstring (so same logic = same hash regardless of language)
     hash_value = hash_compute(normalized_code_without_docstring)
@@ -2447,6 +2588,121 @@ def schema_validate_v1(func_hash: str) -> tuple:
         return False, errors
 
     return True, []
+
+
+def schema_validate_directory() -> tuple:
+    """
+    Validate the entire mobius directory structure.
+
+    Checks:
+    - Config file exists and is valid JSON
+    - Pool directory exists
+    - All functions in pool are valid
+    - All dependencies are resolvable
+
+    Returns:
+        Tuple of (is_valid, errors, stats) where:
+        - is_valid: bool indicating overall validity
+        - errors: list of error messages
+        - stats: dict with validation statistics
+    """
+    errors = []
+    stats = {
+        'functions_total': 0,
+        'functions_valid': 0,
+        'functions_invalid': 0,
+        'languages_total': set(),
+        'dependencies_missing': []
+    }
+
+    mobius_dir = storage_get_mobius_directory()
+
+    # Check if mobius directory exists
+    if not mobius_dir.exists():
+        errors.append(f"Mobius directory does not exist: {mobius_dir}")
+        return False, errors, stats
+
+    # Validate config file
+    config_path = mobius_dir / 'config.json'
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            if not isinstance(config, dict):
+                errors.append("Config file is not a valid JSON object")
+        except json.JSONDecodeError as e:
+            errors.append(f"Config file is invalid JSON: {e}")
+    else:
+        # Config is optional - just note it
+        pass
+
+    # Validate pool directory
+    pool_dir = storage_get_pool_directory()
+    if not pool_dir.exists():
+        errors.append(f"Pool directory does not exist: {pool_dir}")
+        return False, errors, stats
+
+    # Collect all function hashes and validate each
+    all_hashes = set()
+    for prefix_dir in pool_dir.iterdir():
+        if not prefix_dir.is_dir() or len(prefix_dir.name) != 2:
+            continue
+
+        for func_dir in prefix_dir.iterdir():
+            if not func_dir.is_dir():
+                continue
+
+            # Reconstruct hash
+            func_hash = prefix_dir.name + func_dir.name
+
+            # Skip if not a valid hash format
+            if len(func_hash) != 64:
+                continue
+            if not all(c in '0123456789abcdef' for c in func_hash.lower()):
+                continue
+
+            all_hashes.add(func_hash)
+            stats['functions_total'] += 1
+
+            # Validate individual function
+            is_valid, func_errors = schema_validate_v1(func_hash)
+            if is_valid:
+                stats['functions_valid'] += 1
+
+                # Check for available languages
+                for item in func_dir.iterdir():
+                    if item.is_dir() and not item.name.startswith('.'):
+                        stats['languages_total'].add(item.name)
+            else:
+                stats['functions_invalid'] += 1
+                for err in func_errors:
+                    errors.append(f"[{func_hash[:12]}...] {err}")
+
+    # Verify all dependencies are resolvable (only for valid functions)
+    for func_hash in all_hashes:
+        # Skip if this function had validation errors
+        is_valid, _ = schema_validate_v1(func_hash)
+        if not is_valid:
+            continue
+
+        try:
+            func_data = code_load_v1(func_hash)
+            normalized_code = func_data['normalized_code']
+            deps = code_extract_dependencies(normalized_code)
+
+            for dep in deps:
+                if dep not in all_hashes:
+                    stats['dependencies_missing'].append((func_hash, dep))
+                    errors.append(f"[{func_hash[:12]}...] Missing dependency: {dep[:12]}...")
+        except (Exception, SystemExit):
+            # Already reported in individual validation
+            pass
+
+    # Convert set to count for stats
+    stats['languages_total'] = len(stats['languages_total'])
+
+    is_valid = len(errors) == 0
+    return is_valid, errors, stats
 
 
 def command_caller(hash_value: str):
@@ -2897,15 +3153,119 @@ def code_execute(func_hash: str, lang: str, args: list):
     return runtime_dir
 
 
-def command_compile(hash_with_lang: str, output_path: str = None):
+def compile_generate_python(func_hash: str, lang: str) -> str:
     """
-    Compile a function into a standalone executable.
+    Generate a single Python file that includes all dependencies.
+
+    Args:
+        func_hash: Function hash to compile
+        lang: Language for the function
+
+    Returns:
+        Python source code as a string
+    """
+    # Resolve all dependencies
+    deps = code_resolve_dependencies(func_hash)
+
+    # Load all functions
+    functions = []
+    for dep_hash in deps:
+        func_data = code_load_v1(dep_hash)
+        normalized_code = func_data['normalized_code']
+
+        # Get a mapping for this function
+        mappings = mappings_list_v1(dep_hash, lang)
+        if mappings:
+            mapping_hash = mappings[0][0]
+            docstring, name_mapping, alias_mapping, _ = mapping_load_v1(dep_hash, lang, mapping_hash)
+        else:
+            # Try to find any available language
+            available_langs = storage_list_languages(dep_hash)
+            if available_langs:
+                fallback_lang = available_langs[0]
+                mappings = mappings_list_v1(dep_hash, fallback_lang)
+                mapping_hash = mappings[0][0]
+                docstring, name_mapping, alias_mapping, _ = mapping_load_v1(dep_hash, fallback_lang, mapping_hash)
+            else:
+                raise ValueError(f"No language mapping found for {dep_hash}")
+
+        # Denormalize the code
+        normalized_code_with_doc = code_replace_docstring(normalized_code, docstring)
+        denormalized = code_denormalize(normalized_code_with_doc, name_mapping, alias_mapping)
+
+        # Strip mobius imports - dependencies will be included inline
+        denormalized = code_strip_mobius_imports(denormalized)
+
+        functions.append({
+            'hash': dep_hash,
+            'code': denormalized,
+            'func_name': name_mapping.get('_mobius_v_0', 'unknown'),
+            'alias_mapping': alias_mapping
+        })
+
+    # Build the Python file
+    lines = ['#!/usr/bin/env python3', '"""', f'Compiled mobius function: {func_hash}', '"""', '']
+
+    # Collect all standard imports from all functions
+    all_imports = set()
+    for func in functions:
+        tree = ast.parse(func['code'])
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                all_imports.add(ast.unparse(node))
+
+    # Add imports at the top
+    for imp in sorted(all_imports):
+        lines.append(imp)
+    if all_imports:
+        lines.append('')
+
+    # Add each function (without imports)
+    for func in functions:
+        # Parse and extract just the function definition
+        tree = ast.parse(func['code'])
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                lines.append('')
+                lines.append(ast.unparse(node))
+                lines.append('')
+
+    # Add main entry point
+    main_func = functions[-1]  # The last one is the main function (root of dependency tree)
+    lines.append('')
+    lines.append('if __name__ == "__main__":')
+    lines.append('    import sys')
+    lines.append(f'    # Entry point: {main_func["func_name"]}')
+    lines.append('    if len(sys.argv) > 1:')
+    lines.append('        args = []')
+    lines.append('        for arg in sys.argv[1:]:')
+    lines.append('            try:')
+    lines.append('                args.append(int(arg))')
+    lines.append('            except ValueError:')
+    lines.append('                try:')
+    lines.append('                    args.append(float(arg))')
+    lines.append('                except ValueError:')
+    lines.append('                    args.append(arg)')
+    lines.append(f'        result = {main_func["func_name"]}(*args)')
+    lines.append('        print(result)')
+    lines.append('    else:')
+    lines.append(f'        print("Usage: python {{sys.argv[0]}} [args...]")')
+    lines.append(f'        print("Available function: {main_func["func_name"]}")')
+    lines.append('')
+
+    return '\n'.join(lines)
+
+
+def command_compile(hash_with_lang: str, python_mode: bool = False):
+    """
+    Compile a function into a standalone executable or Python file.
 
     Args:
         hash_with_lang: Function hash with language suffix (HASH@lang)
-        output_path: Optional output path for the executable
+        python_mode: If True, generate a single Python file instead of native executable
     """
     import shutil
+    import platform
 
     # Parse the hash and language
     if '@' not in hash_with_lang:
@@ -2930,14 +3290,6 @@ def command_compile(hash_with_lang: str, output_path: str = None):
         print(f"Error: Function not found: {func_hash}", file=sys.stderr)
         sys.exit(1)
 
-    # Check if PyOxidizer is available
-    result = subprocess.run(['pyoxidizer', '--version'], capture_output=True, text=True)
-    if result.returncode != 0:
-        print("Error: PyOxidizer not found. Please install it first:", file=sys.stderr)
-        print("  pip install pyoxidizer", file=sys.stderr)
-        print("  or: cargo install pyoxidizer", file=sys.stderr)
-        sys.exit(1)
-
     print(f"Compiling function {func_hash[:8]}...@{lang}")
 
     # Resolve dependencies
@@ -2950,61 +3302,91 @@ def command_compile(hash_with_lang: str, output_path: str = None):
 
     print(f"  Found {len(deps)} function(s) to bundle")
 
-    # Create build directory
-    build_dir = Path(f'.mobius_build_{func_hash[:8]}')
-    build_dir.mkdir(parents=True, exist_ok=True)
+    if python_mode:
+        # Generate single Python file
+        print("Generating Python file...")
+        output_path = Path('main.py')
 
-    try:
-        # Bundle dependencies
-        print("Bundling functions...")
-        bundle_dir = build_dir / 'bundle'
-        code_bundle_dependencies(deps, bundle_dir)
+        try:
+            python_code = compile_generate_python(func_hash, lang)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(python_code)
+            print(f"Python file created: {output_path}")
+            print(f"Run with: python3 {output_path} [args...]")
+        except Exception as e:
+            print(f"Error generating Python file: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Native executable mode - use PyOxidizer
+        # Determine default output name
+        if platform.system() == 'Windows':
+            output_name = 'a.out.exe'
+        else:
+            output_name = 'a.out'
 
-        # Generate runtime
-        print("Generating runtime...")
-        compile_generate_runtime(func_hash, lang, build_dir)
-
-        # Generate PyOxidizer config
-        print("Generating PyOxidizer configuration...")
-        output_name = output_path if output_path else f'mobius_{func_hash[:8]}'
-        config = compile_generate_config(func_hash, lang, output_name)
-
-        config_path = build_dir / 'pyoxidizer.bzl'
-        with open(config_path, 'w', encoding='utf-8') as f:
-            f.write(config)
-
-        # Build with PyOxidizer
-        print("Building executable...")
-        result = subprocess.run(
-            ['pyoxidizer', 'build', '--release'],
-            cwd=str(build_dir),
-            capture_output=True,
-            text=True
-        )
-
+        # Check if PyOxidizer is available
+        result = subprocess.run(['pyoxidizer', '--version'], capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"Error: PyOxidizer build failed:", file=sys.stderr)
-            print(result.stderr, file=sys.stderr)
+            print("Error: PyOxidizer not found. Please install it first:", file=sys.stderr)
+            print("  pip install pyoxidizer", file=sys.stderr)
+            print("  or: cargo install pyoxidizer", file=sys.stderr)
+            print("\nAlternatively, use --python flag to generate a Python file.", file=sys.stderr)
             sys.exit(1)
 
-        # Find the built executable
-        build_output = build_dir / 'build'
-        exe_found = False
-        for exe in build_output.rglob(output_name):
-            if exe.is_file():
-                final_path = Path(output_path) if output_path else Path(output_name)
-                shutil.copy2(exe, final_path)
-                exe_found = True
-                print(f"Executable created: {final_path}")
-                break
+        # Create build directory
+        build_dir = Path(f'.mobius_build_{func_hash[:8]}')
+        build_dir.mkdir(parents=True, exist_ok=True)
 
-        if not exe_found:
-            print("Warning: Could not find built executable")
-            print(f"Build output is in: {build_dir}")
+        try:
+            # Bundle dependencies
+            print("Bundling functions...")
+            bundle_dir = build_dir / 'bundle'
+            code_bundle_dependencies(deps, bundle_dir)
 
-    finally:
-        # Optionally clean up build directory
-        pass  # Keep for debugging; user can delete manually
+            # Generate runtime
+            print("Generating runtime...")
+            compile_generate_runtime(func_hash, lang, build_dir)
+
+            # Generate PyOxidizer config
+            print("Generating PyOxidizer configuration...")
+            config = compile_generate_config(func_hash, lang, output_name)
+
+            config_path = build_dir / 'pyoxidizer.bzl'
+            with open(config_path, 'w', encoding='utf-8') as f:
+                f.write(config)
+
+            # Build with PyOxidizer
+            print("Building executable...")
+            result = subprocess.run(
+                ['pyoxidizer', 'build', '--release'],
+                cwd=str(build_dir),
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                print(f"Error: PyOxidizer build failed:", file=sys.stderr)
+                print(result.stderr, file=sys.stderr)
+                sys.exit(1)
+
+            # Find the built executable
+            build_output = build_dir / 'build'
+            exe_found = False
+            for exe in build_output.rglob(output_name):
+                if exe.is_file():
+                    final_path = Path(output_name)
+                    shutil.copy2(exe, final_path)
+                    exe_found = True
+                    print(f"Executable created: {final_path}")
+                    break
+
+            if not exe_found:
+                print("Warning: Could not find built executable")
+                print(f"Build output is in: {build_dir}")
+
+        finally:
+            # Optionally clean up build directory
+            pass  # Keep for debugging; user can delete manually
 
     print("Compilation complete!")
 
@@ -3202,8 +3584,10 @@ def main():
     remote_push_parser.add_argument('name', help='Remote name to push to')
 
     # Validate command
-    validate_parser = subparsers.add_parser('validate', help='Validate v1 function structure')
-    validate_parser.add_argument('hash', help='Function hash to validate')
+    validate_parser = subparsers.add_parser('validate', help='Validate function or entire mobius directory')
+    validate_parser.add_argument('hash', nargs='?', help='Function hash to validate (omit for whole directory)')
+    validate_parser.add_argument('--all', '-a', action='store_true',
+                                 help='Validate entire mobius directory including pool and config')
 
     # Caller command
     caller_parser = subparsers.add_parser('caller', help='Find functions that depend on a given function')
@@ -3218,7 +3602,8 @@ def main():
     # Compile command
     compile_parser = subparsers.add_parser('compile', help='Compile function to standalone executable')
     compile_parser.add_argument('hash', help='Function hash with language (e.g., abc123...@eng)')
-    compile_parser.add_argument('--output', '-o', help='Output executable path')
+    compile_parser.add_argument('--python', action='store_true',
+                                help='Produce a single Python file instead of native executable (default output: main.py)')
 
     # Fork command
     fork_parser = subparsers.add_parser('fork', help='Fork a function to create a modified version with lineage tracking')
@@ -3260,20 +3645,43 @@ def main():
         else:
             remote_parser.print_help()
     elif args.command == 'validate':
-        is_valid, errors = schema_validate_v1(args.hash)
-        if is_valid:
-            print(f"✓ Function {args.hash} is valid")
+        if args.all or not args.hash:
+            # Validate entire directory
+            is_valid, errors, stats = schema_validate_directory()
+            print("Mobius Directory Validation")
+            print("=" * 60)
+            print(f"Functions total:   {stats['functions_total']}")
+            print(f"Functions valid:   {stats['functions_valid']}")
+            print(f"Functions invalid: {stats['functions_invalid']}")
+            print(f"Languages found:   {stats['languages_total']}")
+            print(f"Missing deps:      {len(stats['dependencies_missing'])}")
+            print()
+
+            if is_valid:
+                print("✓ Mobius directory is valid")
+            else:
+                print("✗ Validation errors found:", file=sys.stderr)
+                for error in errors[:20]:  # Limit to first 20 errors
+                    print(f"  - {error}", file=sys.stderr)
+                if len(errors) > 20:
+                    print(f"  ... and {len(errors) - 20} more errors", file=sys.stderr)
+                sys.exit(1)
         else:
-            print(f"✗ Function {args.hash} is invalid:", file=sys.stderr)
-            for error in errors:
-                print(f"  - {error}", file=sys.stderr)
-            sys.exit(1)
+            # Validate single function
+            is_valid, errors = schema_validate_v1(args.hash)
+            if is_valid:
+                print(f"✓ Function {args.hash} is valid")
+            else:
+                print(f"✗ Function {args.hash} is invalid:", file=sys.stderr)
+                for error in errors:
+                    print(f"  - {error}", file=sys.stderr)
+                sys.exit(1)
     elif args.command == 'caller':
         command_caller(args.hash)
     elif args.command == 'refactor':
         command_refactor(args.what, args.from_hash, args.to_hash)
     elif args.command == 'compile':
-        command_compile(args.hash, args.output)
+        command_compile(args.hash, python_mode=args.python)
     elif args.command == 'fork':
         command_fork(args.hash)
     else:

@@ -28,16 +28,61 @@ def cli_run(args: list, env: dict = None) -> subprocess.CompletedProcess:
     )
 
 
-def test_run_missing_language_fails(tmp_path):
-    """Test that run fails without language suffix"""
+def test_run_without_language_works(tmp_path):
+    """Test that run works without language suffix when function exists"""
     mobius_dir = tmp_path / '.mobius'
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Setup: Add a function first
+    test_file = tmp_path / "func.py"
+    test_file.write_text('''def greet(name):
+    """Greet someone"""
+    return f"Hello, {name}!"
+''')
+    add_result = cli_run(['add', f'{test_file}@eng'], env=env)
+    func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
+
+    # Test: Run without @lang
+    result = cli_run(['run', func_hash, '--', 'World'], env=env)
+
+    # Assert: Should succeed
+    assert result.returncode == 0
+    assert 'Hello, World!' in result.stdout
+
+
+def test_run_without_language_nonexistent_fails(tmp_path):
+    """Test that run fails without language suffix when function doesn't exist"""
+    mobius_dir = tmp_path / '.mobius'
+    (mobius_dir / 'pool').mkdir(parents=True)
     env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
 
     fake_hash = '0' * 64
     result = cli_run(['run', fake_hash], env=env)
 
     assert result.returncode != 0
-    assert 'Missing language suffix' in result.stderr
+    assert 'No language mappings found' in result.stderr
+
+
+def test_run_debug_requires_language(tmp_path):
+    """Test that run --debug requires language suffix"""
+    mobius_dir = tmp_path / '.mobius'
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Setup: Add a function first
+    test_file = tmp_path / "func.py"
+    test_file.write_text('''def greet(name):
+    """Greet someone"""
+    return f"Hello, {name}!"
+''')
+    add_result = cli_run(['add', f'{test_file}@eng'], env=env)
+    func_hash = add_result.stdout.split('Hash:')[1].strip().split()[0]
+
+    # Test: Run --debug without @lang
+    result = cli_run(['run', '--debug', func_hash], env=env)
+
+    # Assert: Should fail requiring language
+    assert result.returncode != 0
+    assert 'Language suffix required when using --debug' in result.stderr
 
 
 def test_run_invalid_language_fails(tmp_path):
