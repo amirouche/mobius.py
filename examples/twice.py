@@ -1,5 +1,5 @@
-from mobius.pool import object_e025486acdbdf6a2c6362c550f2a49e38e562a3821dcf51554e24a1e2a48a732 as adder
+from mobius.pool import object_e31ac1a23ea37d9d6aab788e89c0c9c9d464e4f5909eb267aaef92cda173dcf4 as add
 
 def twice(number):
     """Double a number by adding it to itself."""
-    return adder(number, number)
+    return add(number, number)
