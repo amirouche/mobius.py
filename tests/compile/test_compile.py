@@ -295,3 +295,94 @@ def test_compile_generate_runtime(tmp_path):
     assert "code_execute" in init_content
     assert "code_load" in init_content
     assert "code_denormalize" in init_content
+
+
+# =============================================================================
+# Tests for --python mode
+# =============================================================================
+
+def test_compile_python_mode_creates_file(cli_runner, tmp_path):
+    """Test that compile --python creates a main.py file"""
+    import os
+
+    # Setup: Add a simple function
+    test_file = tmp_path / "simple.py"
+    test_file.write_text('''def greet(name):
+    """Say hello"""
+    return f"Hello, {name}!"
+''')
+    func_hash = cli_runner.add(str(test_file), 'eng')
+
+    # Test: Run compile with --python
+    # Change to tmp_path so main.py is created there
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = cli_runner.run(['compile', '--python', f'{func_hash}@eng'])
+    finally:
+        os.chdir(original_cwd)
+
+    # Assert: Should succeed and create main.py
+    assert result.returncode == 0
+    assert 'Python file created: main.py' in result.stdout
+
+    main_py = tmp_path / 'main.py'
+    assert main_py.exists()
+
+    # Verify the content
+    content = main_py.read_text()
+    assert '#!/usr/bin/env python3' in content
+    assert 'def greet(name):' in content
+    assert 'if __name__ == "__main__":' in content
+
+
+def test_compile_python_mode_executable(cli_runner, tmp_path):
+    """Test that compiled Python file is executable"""
+    import os
+    import subprocess
+    import sys
+
+    # Setup: Add a simple function
+    test_file = tmp_path / "double.py"
+    test_file.write_text('''def double(x):
+    """Double a number"""
+    return x * 2
+''')
+    func_hash = cli_runner.add(str(test_file), 'eng')
+
+    # Compile with --python
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = cli_runner.run(['compile', '--python', f'{func_hash}@eng'])
+    finally:
+        os.chdir(original_cwd)
+
+    assert result.returncode == 0
+
+    # Run the compiled file
+    main_py = tmp_path / 'main.py'
+    run_result = subprocess.run(
+        [sys.executable, str(main_py), '21'],
+        capture_output=True,
+        text=True
+    )
+
+    assert run_result.returncode == 0
+    assert '42' in run_result.stdout
+
+
+def test_compile_generate_python(mock_mobius_dir):
+    """Test generating Python file content"""
+    func_hash = "pytest01" + "0" * 56
+    normalized_code = normalize_code_for_test('''def _mobius_v_0():
+    """Test function"""
+    return 123
+''')
+    mobius.code_save(func_hash, "eng", normalized_code, "Test function", {"_mobius_v_0": "test_func"}, {})
+
+    python_code = mobius.compile_generate_python(func_hash, "eng")
+
+    assert '#!/usr/bin/env python3' in python_code
+    assert 'def test_func():' in python_code
+    assert 'if __name__ == "__main__":' in python_code

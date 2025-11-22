@@ -150,3 +150,104 @@ def test_validate_no_language_mapping_fails(tmp_path):
     # Assert
     assert result.returncode != 0
     assert 'No language mappings found' in result.stderr
+
+
+# =============================================================================
+# Tests for validate --all (entire directory)
+# =============================================================================
+
+def test_validate_all_empty_pool(tmp_path):
+    """Test that validate --all works with empty pool"""
+    mobius_dir = tmp_path / '.mobius'
+    (mobius_dir / 'pool').mkdir(parents=True)
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Test
+    result = cli_run(['validate', '--all'], env=env)
+
+    # Assert: Should succeed with 0 functions
+    assert result.returncode == 0
+    assert 'Functions total:   0' in result.stdout
+    assert 'valid' in result.stdout.lower()
+
+
+def test_validate_all_valid_pool(tmp_path):
+    """Test that validate --all succeeds for valid pool"""
+    mobius_dir = tmp_path / '.mobius'
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Setup: Add multiple functions
+    for i in range(3):
+        test_file = tmp_path / f"func{i}.py"
+        test_file.write_text(f'def func{i}(): return {i}')
+        cli_run(['add', f'{test_file}@eng'], env=env)
+
+    # Test
+    result = cli_run(['validate', '--all'], env=env)
+
+    # Assert
+    assert result.returncode == 0
+    assert 'Functions total:   3' in result.stdout
+    assert 'Functions valid:   3' in result.stdout
+    assert 'Functions invalid: 0' in result.stdout
+    assert 'valid' in result.stdout.lower()
+
+
+def test_validate_all_shows_statistics(tmp_path):
+    """Test that validate --all shows statistics"""
+    mobius_dir = tmp_path / '.mobius'
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Setup: Add a function
+    test_file = tmp_path / "func.py"
+    test_file.write_text('def stats_test(): pass')
+    cli_run(['add', f'{test_file}@eng'], env=env)
+
+    # Test
+    result = cli_run(['validate', '--all'], env=env)
+
+    # Assert: Should show statistics
+    assert result.returncode == 0
+    assert 'Mobius Directory Validation' in result.stdout
+    assert 'Functions total' in result.stdout
+    assert 'Functions valid' in result.stdout
+    assert 'Languages found' in result.stdout
+    assert 'Missing deps' in result.stdout
+
+
+def test_validate_all_detects_invalid_function(tmp_path):
+    """Test that validate --all detects invalid functions"""
+    mobius_dir = tmp_path / '.mobius'
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Setup: Add a valid function first
+    test_file = tmp_path / "valid.py"
+    test_file.write_text('def valid(): pass')
+    cli_run(['add', f'{test_file}@eng'], env=env)
+
+    # Create an invalid function manually
+    fake_hash = 'e' * 64
+    func_dir = mobius_dir / 'pool' / fake_hash[:2] / fake_hash[2:]
+    func_dir.mkdir(parents=True)
+    (func_dir / 'object.json').write_text('invalid json')
+
+    # Test
+    result = cli_run(['validate', '--all'], env=env)
+
+    # Assert: Should fail and report error
+    assert result.returncode != 0
+    assert 'Functions invalid: 1' in result.stdout
+
+
+def test_validate_no_args_validates_directory(tmp_path):
+    """Test that validate without hash validates entire directory"""
+    mobius_dir = tmp_path / '.mobius'
+    (mobius_dir / 'pool').mkdir(parents=True)
+    env = {'MOBIUS_DIRECTORY': str(mobius_dir)}
+
+    # Test: No hash provided, should validate directory
+    result = cli_run(['validate'], env=env)
+
+    # Assert: Should run directory validation
+    assert result.returncode == 0
+    assert 'Mobius Directory Validation' in result.stdout

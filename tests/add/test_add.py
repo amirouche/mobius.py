@@ -299,3 +299,51 @@ def test_add_hash_stability(cli_runner, tmp_path):
     # Assert: Identical hashes
     assert hash1 == hash2
     assert len(hash1) == 64
+
+
+def test_add_missing_mobius_import_fails(cli_runner, tmp_path):
+    """Test that add fails when mobius imports don't exist in pool"""
+    # Setup: Create function that imports a non-existent mobius function
+    fake_hash = 'a' * 64
+    test_file = tmp_path / "with_missing_dep.py"
+    test_file.write_text(f'''from mobius.pool import object_{fake_hash} as helper
+
+def use_helper(x):
+    """Use helper function"""
+    return helper(x) + 1
+''')
+
+    # Test
+    result = cli_runner.run(['add', f'{test_file}@eng'])
+
+    # Assert: Should fail with informative error
+    assert result.returncode != 0
+    assert 'do not exist in the local pool' in result.stderr
+    assert 'helper' in result.stderr
+
+
+def test_add_with_existing_mobius_import_succeeds(cli_runner, tmp_path):
+    """Test that add succeeds when mobius imports exist in pool"""
+    # Setup: First add a helper function
+    helper_file = tmp_path / "helper.py"
+    helper_file.write_text('''def helper(x):
+    """Helper function"""
+    return x * 2
+''')
+    helper_hash = cli_runner.add(str(helper_file), 'eng')
+
+    # Create function that imports the helper
+    test_file = tmp_path / "use_helper.py"
+    test_file.write_text(f'''from mobius.pool import object_{helper_hash} as helper
+
+def use_helper(x):
+    """Use helper function"""
+    return helper(x) + 1
+''')
+
+    # Test
+    result = cli_runner.run(['add', f'{test_file}@eng'])
+
+    # Assert: Should succeed
+    assert result.returncode == 0
+    assert 'Hash:' in result.stdout
