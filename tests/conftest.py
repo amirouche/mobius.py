@@ -96,8 +96,7 @@ class CLIRunner:
 
     Directory structure:
         mobius_dir/
-        ├── pool/          # Pool directory (git repository)
-        │   └── sha256/    # Hash algorithm prefix
+        ├── pool/          # Pool directory
         └── config.json    # Configuration file
     """
 
@@ -147,7 +146,6 @@ def mock_mobius_dir(tmp_path, monkeypatch):
     Directory structure:
         tmp_path/.mobius/
         ├── pool/          # Pool directory
-        │   └── sha256/    # Hash algorithm prefix
         └── config.json    # Configuration file
     """
     base_dir = tmp_path / '.mobius'
@@ -173,7 +171,6 @@ def cli_runner(tmp_path):
     Creates the directory structure:
         tmp_path/.mobius/
         ├── pool/           # Pool directory
-        │   └── sha256/     # Hash algorithm prefix
         └── config.json     # Configuration file
     """
     mobius_dir = tmp_path / '.mobius'

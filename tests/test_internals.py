@@ -863,20 +863,17 @@ def test_mapping_compute_hash_canonical_json():
 def test_schema_detect_version_v1(mock_mobius_dir):
     """Test that schema_detect_version correctly identifies v1 format"""
     pool_dir = mock_mobius_dir / '.mobius' / 'pool'
-    objects_dir = pool_dir
     test_hash = "abcd1234" + "0" * 56
 
-    # Create v1 format: sha256/XX/YYYYYY.../object.json
-    func_dir = objects_dir / 'sha256' / test_hash[:2] / test_hash[2:]
+    # Create v1 format: pool/XX/YYYYYY.../object.json
+    func_dir = pool_dir / test_hash[:2] / test_hash[2:]
     func_dir.mkdir(parents=True, exist_ok=True)
     object_json = func_dir / 'object.json'
 
     v1_data = {
         'schema_version': 1,
         'hash': test_hash,
-        'hash_algorithm': 'sha256',
         'normalized_code': 'def _mobius_v_0(): pass',
-        'encoding': 'none',
         'metadata': {}
     }
 
@@ -901,13 +898,6 @@ def test_metadata_create_basic():
 
     assert 'created' in metadata
     assert 'author' in metadata
-    assert 'tags' in metadata
-    assert 'dependencies' in metadata
-
-    assert isinstance(metadata['tags'], list)
-    assert isinstance(metadata['dependencies'], list)
-    assert len(metadata['tags']) == 0
-    assert len(metadata['dependencies']) == 0
 
 
 def test_metadata_create_with_author():

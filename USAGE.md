@@ -347,12 +347,12 @@ Not used. Author identity is automatically taken from `$USER` or `$USERNAME` env
 Default write format. Content-addressed mappings enable deduplication and multiple naming variants per language.
 
 ```
-$MOBIUS_DIRECTORY/pool/sha256/XX/YYYYYY.../
-  object.json                           # Normalized code + metadata
-  eng/sha256/XX/YYY.../mapping.json     # English name mapping
-  eng/sha256/ZZ/WWW.../mapping.json     # Another English variant
-  fra/sha256/XX/YYY.../mapping.json     # French name mapping
+$MOBIUS_DIRECTORY/pool/XX/YYYYYY.../
+  object.json                    # Normalized code + metadata
+  eng/XX/YYY.../mapping.json     # English name mapping
+  eng/ZZ/WWW.../mapping.json     # Another English variant
+  fra/XX/YYY.../mapping.json     # French name mapping
 ```
 
-**object.json**: Function code, hash, metadata (author, timestamp, tags), related objects
+**object.json**: Function code, hash, metadata (author, timestamp)
 **mapping.json**: Docstring, name mappings, alias mappings, comment (explains variant)

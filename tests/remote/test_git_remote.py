@@ -165,7 +165,7 @@ def test_remote_pull_file(cli_runner, tmp_path):
     # Setup: Create remote pool with a function
     remote_pool = tmp_path / "remote_pool"
     remote_pool.mkdir()
-    remote_objects = remote_pool / "objects" / "sha256" / "ab"
+    remote_objects = remote_pool / "pool" / "ab"
     remote_objects.mkdir(parents=True)
 
     # Create a minimal v1 function

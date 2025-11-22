@@ -204,7 +204,7 @@ def test_dependencies_bundle(mock_mobius_dir, tmp_path):
 
     assert result == output_dir
     assert output_dir.exists()
-    assert (output_dir / "sha256").exists()  # v1 structure directly in output_dir
+    assert (output_dir / func_hash[:2]).exists()  # v1 structure directly in output_dir
 
 
 # =============================================================================

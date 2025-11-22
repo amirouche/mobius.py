@@ -21,17 +21,14 @@ def test_function_save_v1_creates_object_json(mock_mobius_dir):
     normalized_code = normalize_code_for_test("def _mobius_v_0(): pass")
     metadata = {
         'created': '2025-01-01T00:00:00Z',
-        'author': 'testuser',
-        'tags': ['test'],
-        'dependencies': []
+        'author': 'testuser'
     }
 
     mobius.function_save_v1(test_hash, normalized_code, metadata)
 
-    # Check that object.json was created - with sha256 in path
+    # Check that object.json was created
     pool_dir = mock_mobius_dir / '.mobius' / 'pool'
-    objects_dir = pool_dir
-    func_dir = objects_dir / 'sha256' / test_hash[:2] / test_hash[2:]
+    func_dir = pool_dir / test_hash[:2] / test_hash[2:]
     object_json = func_dir / 'object.json'
 
     assert object_json.exists()
@@ -42,9 +39,7 @@ def test_function_save_v1_creates_object_json(mock_mobius_dir):
 
     assert data['schema_version'] == 1
     assert data['hash'] == test_hash
-    assert data['hash_algorithm'] == 'sha256'
     assert data['normalized_code'] == normalized_code
-    assert data['encoding'] == 'none'
     assert data['metadata'] == metadata
 
 
@@ -57,8 +52,7 @@ def test_function_save_v1_no_language_data(mock_mobius_dir):
     mobius.function_save_v1(test_hash, normalized_code, metadata)
 
     pool_dir = mock_mobius_dir / '.mobius' / 'pool'
-    objects_dir = pool_dir
-    func_dir = objects_dir / 'sha256' / test_hash[:2] / test_hash[2:]
+    func_dir = pool_dir / test_hash[:2] / test_hash[2:]
     object_json = func_dir / 'object.json'
 
     with open(object_json, 'r', encoding='utf-8') as f:
@@ -87,11 +81,10 @@ def test_mapping_save_v1_creates_mapping_json(mock_mobius_dir):
     # Now save the mapping
     mapping_hash = mobius.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment)
 
-    # Check that mapping.json was created - with sha256 in paths
+    # Check that mapping.json was created
     pool_dir = mock_mobius_dir / '.mobius' / 'pool'
-    objects_dir = pool_dir
-    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
-    mapping_dir = func_dir / lang / 'sha256' / mapping_hash[:2] / mapping_hash[2:]
+    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
+    mapping_dir = func_dir / lang / mapping_hash[:2] / mapping_hash[2:]
     mapping_json = mapping_dir / 'mapping.json'
 
     assert mapping_json.exists()
@@ -202,10 +195,9 @@ def test_v1_write_integration_full_structure(mock_mobius_dir):
         "Français simple"
     )
 
-    # Verify directory structure - with sha256 in paths
+    # Verify directory structure
     pool_dir = mock_mobius_dir / '.mobius' / 'pool'
-    objects_dir = pool_dir
-    func_dir = objects_dir / 'sha256' / func_hash[:2] / func_hash[2:]
+    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
 
     # Check object.json exists
     assert (func_dir / 'object.json').exists()
@@ -214,9 +206,9 @@ def test_v1_write_integration_full_structure(mock_mobius_dir):
     assert (func_dir / 'eng').exists()
     assert (func_dir / 'fra').exists()
 
-    # Check mapping files exist - with sha256 in mapping paths
-    assert (func_dir / 'eng' / 'sha256' / eng_hash[:2] / eng_hash[2:] / 'mapping.json').exists()
-    assert (func_dir / 'fra' / 'sha256' / fra_hash[:2] / fra_hash[2:] / 'mapping.json').exists()
+    # Check mapping files exist
+    assert (func_dir / 'eng' / eng_hash[:2] / eng_hash[2:] / 'mapping.json').exists()
+    assert (func_dir / 'fra' / fra_hash[:2] / fra_hash[2:] / 'mapping.json').exists()
 
 
 # ============================================================================
@@ -243,9 +235,7 @@ def test_function_load_v1_loads_object_json(mock_mobius_dir):
     # Verify data
     assert loaded_data['schema_version'] == 1
     assert loaded_data['hash'] == func_hash
-    assert loaded_data['hash_algorithm'] == 'sha256'
     assert loaded_data['normalized_code'] == normalized_code
-    assert loaded_data['encoding'] == 'none'
     assert loaded_data['metadata'] == metadata
 
 

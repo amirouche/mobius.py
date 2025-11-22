@@ -18,7 +18,7 @@ Functions with identical logic but different naming (e.g., English vs French var
 1. **AST-based normalization**: Source code is parsed into an AST, normalized, then unparsed
 2. **Hash on logic, not names**: Docstrings excluded from hash computation to enable multilingual support
 3. **Bidirectional mapping**: Original names preserved for reconstruction in target language
-4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/mobius/pool/sha256/xx/yy.../object.json` (configurable via `MOBIUS_DIRECTORY` environment variable)
+4. **Content-addressed storage**: Functions stored by hash in `$HOME/.local/mobius/pool/xx/yy.../object.json` (configurable via `MOBIUS_DIRECTORY` environment variable)
 5. **Single-file architecture**: All code resides in `mobius.py` - no modularization into separate packages. This keeps the tool simple, self-contained, and easy to distribute as a single script.
 6. **Object prefix for valid identifiers**: Mobius imports use `object_` prefix (e.g., `from mobius.pool import object_abc123 as func`) to ensure valid Python identifiers since SHA256 hashes can start with digits (0-9)
 
@@ -80,20 +80,17 @@ mobius.py/
 
 ```
 $HOME/.local/mobius/pool/          # Default location (or $MOBIUS_DIRECTORY/pool/)
-└── sha256/                        # Hash algorithm
-    └── ab/                        # First 2 chars of function hash
-        └── c123def456.../         # Function directory (remaining hash chars)
-            ├── object.json        # Core function data
-            ├── eng/               # Language directory
-            │   └── sha256/        # Mapping hash algorithm
-            │       └── xy/        # First 2 chars of mapping hash
-            │           └── z789.../
-            │               └── mapping.json
-            └── fra/               # Another language
-                └── sha256/
-                    └── mn/
-                        └── opqr.../
-                            └── mapping.json
+└── ab/                            # First 2 chars of function hash
+    └── c123def456.../             # Function directory (remaining hash chars)
+        ├── object.json            # Core function data
+        ├── eng/                   # Language directory
+        │   └── xy/                # First 2 chars of mapping hash
+        │       └── z789.../
+        │           └── mapping.json
+        └── fra/                   # Another language
+            └── mn/
+                └── opqr.../
+                    └── mapping.json
 ```
 
 ## Key Components
@@ -151,7 +148,7 @@ $HOME/.local/mobius/pool/          # Default location (or $MOBIUS_DIRECTORY/pool
 
 #### `schema_detect_version(func_hash)` (lines 374-406)
 **Detects if a function exists in the pool**
-- Checks filesystem for v1 format: `pool/sha256/XX/YYYYYY.../object.json`
+- Checks filesystem for v1 format: `pool/XX/YYYYYY.../object.json`
 - Returns: 1 if found, None if not found
 
 #### `metadata_create()` (lines 409-435)
@@ -232,20 +229,17 @@ See `strategies/schema-v1.md` for the complete specification.
 **Directory Structure:**
 ```
 $MOBIUS_DIRECTORY/pool/            # Default: $HOME/.local/mobius/pool/
-  sha256/                          # Hash algorithm
-    ab/                            # First 2 chars of function hash
-      c123def456.../               # Function directory (remaining hash chars)
-        object.json                # Core function data
-        eng/                       # Language code directory
-          sha256/                  # Hash algorithm for mapping
-            xy/                    # First 2 chars of mapping hash
-              z789.../             # Mapping directory (remaining hash chars)
-                mapping.json       # Language mapping (content-addressed)
-        fra/                       # Another language
-          sha256/
-            mn/
-              opqr.../
-                mapping.json       # Another language/variant
+  ab/                              # First 2 chars of function hash
+    c123def456.../                 # Function directory (remaining hash chars)
+      object.json                  # Core function data
+      eng/                         # Language code directory
+        xy/                        # First 2 chars of mapping hash
+          z789.../                 # Mapping directory (remaining hash chars)
+            mapping.json           # Language mapping (content-addressed)
+      fra/                         # Another language
+        mn/
+          opqr.../
+            mapping.json           # Another language/variant
 ```
 
 **object.json**:
@@ -583,7 +577,7 @@ CRITICAL: Hash excludes docstrings to enable multilingual support
    - **Consistent encoding**: UTF-8 encoding for all serialized data
 
 2. **Hash vs. filename distinction**:
-   - The hash in a filename (e.g., `pool/sha256/ab/cdef123.../object.json` or `eng/sha256/xy/z789.../mapping.json`) identifies the **logical content**
+   - The hash in a filename (e.g., `pool/ab/cdef123.../object.json` or `eng/xy/z789.../mapping.json`) identifies the **logical content**
    - It is NOT a hash of the physical file's bytes on disk
    - The stored JSON may include metadata, formatting, or additional fields not included in hash computation
 
@@ -677,7 +671,7 @@ When referencing code locations, use this format:
 
 ## Debugging Tips
 
-1. **Inspect JSON**: `cat ~/.local/mobius/pool/sha256/XX/YYY.../object.json | python3 -m json.tool`
+1. **Inspect JSON**: `cat ~/.local/mobius/pool/XX/YYY.../object.json | python3 -m json.tool`
 2. **Check AST**: Use `ast.dump()` to inspect tree structure
 3. **Compare hashes**: Same logic should produce same hash
 4. **Verify mappings**: Check name_mappings in JSON for correctness
