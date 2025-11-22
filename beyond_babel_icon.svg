@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="iconGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7B68EE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D94A8C;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#1a1a2e"/>
+
+  <!-- Stylized "B" made of blocks transforming to connected shapes -->
+  <!-- Left tower blocks -->
+  <rect x="22" y="65" width="12" height="12" fill="#4A90D9" rx="2"/>
+  <rect x="22" y="50" width="12" height="12" fill="#5B7FD9" rx="2"/>
+  <rect x="22" y="35" width="12" height="12" fill="#6B6EEE" rx="2"/>
+  <rect x="22" y="22" width="12" height="10" fill="#7B68EE" rx="2"/>
+
+  <!-- Connecting curves/arcs -->
+  <path d="M 34 28 Q 55 28 55 40 Q 55 50 38 50" stroke="url(#iconGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 34 53 Q 60 53 60 65 Q 60 77 34 77" stroke="url(#iconGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Connected nodes on the right -->
+  <circle cx="55" cy="40" r="5" fill="#9B59B6"/>
+  <circle cx="60" cy="65" r="6" fill="#D94A8C"/>
+  <circle cx="48" cy="50" r="4" fill="#B668D9"/>
+
+  <!-- Small connecting dots -->
+  <circle cx="70" cy="50" r="3" fill="#D94A8C" opacity="0.7"/>
+  <circle cx="75" cy="38" r="2" fill="#7B68EE" opacity="0.5"/>
+  <circle cx="73" cy="62" r="2" fill="#9B59B6" opacity="0.5"/>
+</svg>

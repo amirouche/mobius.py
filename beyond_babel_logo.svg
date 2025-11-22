@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7B68EE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D94A8C;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Abstract tower blocks transforming into connected nodes -->
+  <g transform="translate(20, 15)">
+    <!-- Deconstructed tower blocks -->
+    <rect x="0" y="60" width="16" height="16" fill="#4A90D9" rx="2"/>
+    <rect x="20" y="45" width="16" height="16" fill="#5B7FD9" rx="2"/>
+    <rect x="10" y="30" width="16" height="16" fill="#6B6EEE" rx="2"/>
+    <rect x="25" y="15" width="12" height="12" fill="#7B68EE" rx="2"/>
+
+    <!-- Connecting lines (transformation) -->
+    <line x1="36" y1="53" x2="50" y2="45" stroke="url(#grad1)" stroke-width="2" stroke-dasharray="4,2"/>
+    <line x1="36" y1="38" x2="50" y2="38" stroke="url(#grad1)" stroke-width="2" stroke-dasharray="4,2"/>
+    <line x1="37" y1="21" x2="50" y2="30" stroke="url(#grad1)" stroke-width="2" stroke-dasharray="4,2"/>
+
+    <!-- Connected nodes (unified/beyond) -->
+    <circle cx="58" cy="45" r="6" fill="#9B59B6"/>
+    <circle cx="58" cy="30" r="6" fill="#9B59B6"/>
+    <circle cx="70" cy="38" r="8" fill="#D94A8C"/>
+    <line x1="58" y1="39" x2="58" y2="36" stroke="#B668D9" stroke-width="2"/>
+    <line x1="63" y1="42" x2="63" y2="34" stroke="#C668C9" stroke-width="2"/>
+  </g>
+
+  <!-- Text: "beyond" -->
+  <text x="105" y="55" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="32" font-weight="300" fill="#4A5568">beyond</text>
+
+  <!-- Text: "babel" -->
+  <text x="105" y="90" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="38" font-weight="700" fill="url(#grad1)">babel</text>
+</svg>

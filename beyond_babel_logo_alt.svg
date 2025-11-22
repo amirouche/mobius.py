@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
+  <defs>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Minimal tower icon dissolving into infinity/mobius-like flow -->
+  <g transform="translate(15, 20)">
+    <!-- Stacked blocks -->
+    <rect x="0" y="40" width="20" height="20" fill="#3B82F6" rx="3"/>
+    <rect x="3" y="22" width="14" height="14" fill="#6366F1" rx="2"/>
+    <rect x="5" y="8" width="10" height="10" fill="#8B5CF6" rx="2"/>
+
+    <!-- Flowing lines emerging from tower -->
+    <path d="M 25 50 C 40 50, 45 35, 60 35 C 75 35, 80 50, 95 50"
+          stroke="url(#grad2)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 25 35 C 40 35, 50 50, 70 50 C 85 50, 90 30, 95 30"
+          stroke="url(#grad2)" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+  </g>
+
+  <!-- Text -->
+  <text x="125" y="62" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="36" font-weight="600" letter-spacing="-1">
+    <tspan fill="#374151">beyond</tspan>
+    <tspan fill="url(#grad2)" dx="8">babel</tspan>
+  </text>
+</svg>
