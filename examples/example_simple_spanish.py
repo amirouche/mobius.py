@@ -1,4 +1,4 @@
-def calculate_sum(first_number, second_number):
+def calcular_suma(primer_numero, segundo_numero):
     """Calcular la suma de dos números."""
-    result = first_number + second_number
-    return result
+    resultado = primer_numero + segundo_numero
+    return resultado

@@ -173,18 +173,20 @@ def code_create_name_mapping(function_def: Union[ast.FunctionDef, ast.AsyncFunct
     counter += 1
 
     # Collect all names in the function (excluding imported names, built-ins, and mobius aliases)
-    all_names = set()
+    all_names = list()
     for node in ast.walk(function_def):
         if isinstance(node, ast.Name) and node.id not in imported_names and node.id not in PYTHON_BUILTINS and node.id not in mobius_aliases:
-            all_names.add(node.id)
+            all_names.append(node.id)
         elif isinstance(node, ast.arg) and node.arg not in imported_names and node.arg not in PYTHON_BUILTINS and node.arg not in mobius_aliases:
-            all_names.add(node.arg)
+            all_names.append(node.arg)
 
-    # Remove function name as it's already mapped
-    all_names.discard(function_def.name)
+    # XXX: all_names: do not sort, keep the order ast traversal
+    # discovery.
 
-    # Sort names for consistent mapping
-    for name in sorted(all_names):
+    # TODO: add a test about hash determinism, use the following
+    # examples: examples/example_simple.py and
+    # examples/example_simple_french.py.
+    for name in all_names:
         normalized = f'_mobius_v_{counter}'
         forward_mapping[name] = normalized
         reverse_mapping[normalized] = name
