@@ -239,3 +239,63 @@ def test_add_syntax_error_fails(cli_runner, tmp_path):
 
     # Assert
     assert result.returncode != 0
+
+
+def test_add_empty_file_fails(cli_runner, tmp_path):
+    """Test that empty file causes error"""
+    # Setup
+    test_file = tmp_path / "empty.py"
+    test_file.write_text("")
+
+    # Test
+    result = cli_runner.run(['add', f'{test_file}@eng'])
+
+    # Assert
+    assert result.returncode != 0
+    assert 'No function definition' in result.stderr
+
+
+def test_add_class_only_fails(cli_runner, tmp_path):
+    """Test that file with only class (no function) causes error"""
+    # Setup
+    test_file = tmp_path / "classonly.py"
+    test_file.write_text("class Foo:\n    pass\n")
+
+    # Test
+    result = cli_runner.run(['add', f'{test_file}@eng'])
+
+    # Assert
+    assert result.returncode != 0
+    assert 'No function definition' in result.stderr
+
+
+def test_add_function_without_docstring(cli_runner, tmp_path):
+    """Test adding function without docstring works"""
+    # Setup
+    test_file = tmp_path / "nodoc.py"
+    test_file.write_text("def double(x):\n    return x * 2\n")
+
+    # Test
+    result = cli_runner.run(['add', f'{test_file}@eng'])
+
+    # Assert
+    assert result.returncode == 0
+    assert 'Hash:' in result.stdout
+
+
+def test_add_hash_stability(cli_runner, tmp_path):
+    """Test that the same function produces identical hash on repeated adds"""
+    # Setup
+    test_file = tmp_path / "stable.py"
+    test_file.write_text('''def compute(value):
+    """Compute something"""
+    return value * 3
+''')
+
+    # Test: Add twice
+    hash1 = cli_runner.add(str(test_file), 'eng')
+    hash2 = cli_runner.add(str(test_file), 'eng')
+
+    # Assert: Identical hashes
+    assert hash1 == hash2
+    assert len(hash1) == 64
