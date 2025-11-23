@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="logo.svg" alt="Beyond Babel Logo" width="200" />
-</p>
-
 # bb.py
 
 ![Tests](https://github.com/amirouche/bb.py/actions/workflows/test.yml/badge.svg)
@@ -9,6 +5,8 @@
 **Beyond Babel, Python all around the world, one function at a time**
 
 > ⚠️ **Experimental**: This is research software under active development.
+
+> 🐮 **Curious?** Check out the [transcripts](transcripts/end2end/) first, especially [La Langue du Feu](https://github.com/amirouche/bb.py/blob/main/transcripts/end2end/00.md) — a multilingual coding session that shows Beyond Babel in action.
 
 Write functions in your language. Share logic universally. Beyond Babel creates bridges through shared logic—not by erasing differences, but by recognizing equivalence where it naturally emerges.
 
