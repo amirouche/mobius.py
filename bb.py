@@ -1544,6 +1544,112 @@ def command_remote_push(name: str):
         sys.exit(1)
 
 
+def command_remote_sync():
+    """
+    Sync with all remotes: pull rebase from each, then push to all.
+
+    This command:
+    1. For each remote: fetch and rebase local changes on top
+    2. For each remote: push local commits
+
+    Uses $BB_DIRECTORY/git/ as the local repository.
+    """
+    import shutil
+
+    config = storage_read_config()
+
+    if not config['remotes']:
+        print("No remotes configured. Use 'bb remote add' first.")
+        return
+
+    git_dir = storage_get_git_directory()
+    pool_dir = storage_get_pool_directory()
+
+    if not git_dir.exists() or not (git_dir / '.git').exists():
+        print("Error: No committed functions. Use 'bb commit HASH' first.", file=sys.stderr)
+        sys.exit(1)
+
+    print("Syncing with all remotes...")
+    print()
+
+    # Phase 1: Pull rebase from all remotes
+    for name, remote in config['remotes'].items():
+        url = remote['url']
+        remote_type = remote.get('type', git_detect_remote_type(url))
+
+        if remote_type not in ('git-ssh', 'git-https', 'git-file'):
+            print(f"Skipping '{name}': only git remotes supported for sync")
+            continue
+
+        parsed = git_url_parse(url)
+
+        # Ensure remote is configured
+        result = git_run(['remote', 'get-url', name], cwd=str(git_dir))
+        if result.returncode != 0:
+            result = git_run(['remote', 'add', name, parsed['git_url']], cwd=str(git_dir))
+            if result.returncode != 0:
+                print(f"Warning: Failed to add remote '{name}': {result.stderr}")
+                continue
+
+        # Fetch
+        print(f"Fetching from '{name}'...")
+        result = git_run(['fetch', name], cwd=str(git_dir))
+        if result.returncode != 0:
+            print(f"Warning: Failed to fetch from '{name}': {result.stderr}")
+            continue
+
+        # Rebase on remote (try main, then master)
+        result = git_run(['rebase', f'{name}/main'], cwd=str(git_dir))
+        if result.returncode != 0:
+            result = git_run(['rebase', f'{name}/master'], cwd=str(git_dir))
+            if result.returncode != 0:
+                # Abort rebase if it failed
+                git_run(['rebase', '--abort'], cwd=str(git_dir))
+                print(f"Warning: Rebase from '{name}' failed, skipping")
+                continue
+
+        print(f"  Rebased on '{name}'")
+
+    # Copy any new functions from git dir to pool
+    pulled_count = 0
+    for item in git_dir.rglob('*.json'):
+        rel_path = item.relative_to(git_dir)
+        pool_item = pool_dir / rel_path
+
+        if not pool_item.exists():
+            pool_item.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, pool_item)
+            pulled_count += 1
+
+    if pulled_count > 0:
+        print(f"  Copied {pulled_count} new functions to pool")
+
+    print()
+
+    # Phase 2: Push to all remotes
+    for name, remote in config['remotes'].items():
+        url = remote['url']
+        remote_type = remote.get('type', git_detect_remote_type(url))
+
+        if remote_type not in ('git-ssh', 'git-https', 'git-file'):
+            continue
+
+        parsed = git_url_parse(url)
+
+        print(f"Pushing to '{name}'...")
+        result = git_run(['push', name, 'HEAD:main'], cwd=str(git_dir))
+        if result.returncode != 0:
+            result = git_run(['push', name, 'HEAD:master'], cwd=str(git_dir))
+            if result.returncode != 0:
+                print(f"Warning: Failed to push to '{name}': {result.stderr}")
+                continue
+
+        print(f"  Pushed to '{name}'")
+
+    print()
+    print("Sync complete.")
+
+
 def code_extract_dependencies(normalized_code: str) -> List[str]:
     """
     Extract bb dependencies from normalized code.
@@ -3834,6 +3940,9 @@ def main():
     remote_push_parser = remote_subparsers.add_parser('push', help='Publish functions to remote')
     remote_push_parser.add_argument('name', help='Remote name to push to')
 
+    # Remote sync
+    remote_sync_parser = remote_subparsers.add_parser('sync', help='Pull rebase then push to all remotes')
+
     # Validate command
     validate_parser = subparsers.add_parser('validate', help='Validate function or entire bb directory')
     validate_parser.add_argument('hash', nargs='?', help='Function hash to validate (omit for whole directory)')
@@ -3900,6 +4009,8 @@ def main():
             command_remote_pull(args.name)
         elif args.remote_command == 'push':
             command_remote_push(args.name)
+        elif args.remote_command == 'sync':
+            command_remote_sync()
         else:
             remote_parser.print_help()
     elif args.command == 'validate':
