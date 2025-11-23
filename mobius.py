@@ -1760,18 +1760,20 @@ def command_search(query: List[str]):
                     func_hash = data['hash']
                     normalized_code = data['normalized_code']
 
-                    # Search in code
-                    code_lower = normalized_code.lower()
-                    if any(term in code_lower for term in search_terms):
-                        # Get available languages and load first available
-                        for lang_dir in func_dir.iterdir():
-                            if lang_dir.is_dir() and len(lang_dir.name) == 3:
-                                lang = lang_dir.name
-                                try:
-                                    _, name_mapping, _, docstring = code_load(func_hash, lang)
-                                    func_name = name_mapping.get('_mobius_v_0', 'unknown')
+                    # Get available languages and search in mappings
+                    for lang_dir in func_dir.iterdir():
+                        if lang_dir.is_dir() and len(lang_dir.name) == 3:
+                            lang = lang_dir.name
+                            try:
+                                _, name_mapping, _, docstring = code_load(func_hash, lang)
+                                func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
-                                    # Check if search term in function name or docstring
+                                # Search in function name, docstring, original names, and code
+                                all_original_names = ' '.join(name_mapping.values()).lower()
+                                searchable = f"{func_name} {docstring} {all_original_names} {normalized_code}".lower()
+
+                                if any(term in searchable for term in search_terms):
+                                    # Determine where match was found
                                     match_in = []
                                     if any(term in func_name.lower() for term in search_terms):
                                         match_in.append('name')
@@ -1788,8 +1790,8 @@ def command_search(query: List[str]):
                                         'match_in': match_in
                                     })
                                     break
-                                except SystemExit:
-                                    continue
+                            except SystemExit:
+                                continue
                 except (IOError, json.JSONDecodeError):
                     continue
 
@@ -2263,8 +2265,8 @@ def code_add(file_path_with_lang: str, comment: str = ""):
     # Compute hash on code WITHOUT docstring (so same logic = same hash regardless of language)
     hash_value = hash_compute(normalized_code_without_docstring)
 
-    # Save to v1 format (store the version WITH docstring for display purposes)
-    code_save(hash_value, lang, normalized_code_with_docstring, docstring, name_mapping, alias_mapping, comment, checks=checks)
+    # Save to v1 format (docstring stored separately in mapping.json)
+    code_save(hash_value, lang, normalized_code_without_docstring, docstring, name_mapping, alias_mapping, comment, checks=checks)
 
 
 def code_replace_docstring(code: str, new_docstring: str) -> str:
@@ -3029,8 +3031,8 @@ def command_refactor(what_hash: str, from_hash: str, to_hash: str):
     # Create metadata for the new function
     metadata = code_create_metadata()
 
-    # Save the new function (object.json)
-    code_save_v1(new_hash, new_normalized_code, metadata)
+    # Save the new function (object.json) - docstring stored in mapping.json
+    code_save_v1(new_hash, code_without_docstring, metadata)
 
     # Copy all language mappings from what_hash to new_hash (v1 only)
     for lang in languages:
@@ -3741,8 +3743,8 @@ def command_fork(hash_with_lang: str):
             mapping_save_v1(new_hash, lang, new_docstring, new_name_mapping, new_alias_mapping, comment)
             print(f"\nNew mapping saved to existing function: {new_hash}@{lang}")
         else:
-            # Save as new function with parent lineage
-            code_save(new_hash, lang, new_normalized_with_doc, new_docstring, new_name_mapping, new_alias_mapping,
+            # Save as new function with parent lineage (docstring stored in mapping.json)
+            code_save(new_hash, lang, new_normalized_without_doc, new_docstring, new_name_mapping, new_alias_mapping,
                       comment=f"Forked from {func_hash[:8]}...", parent=func_hash)
             print(f"\nForked function saved: {new_hash}")
             print(f"Parent: {func_hash}")
