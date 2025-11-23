@@ -1758,7 +1758,6 @@ def command_search(query: List[str]):
                         data = json.load(f)
 
                     func_hash = data['hash']
-                    normalized_code = data['normalized_code']
 
                     # Get available languages and search in mappings
                     for lang_dir in func_dir.iterdir():
@@ -1768,9 +1767,9 @@ def command_search(query: List[str]):
                                 _, name_mapping, _, docstring = code_load(func_hash, lang)
                                 func_name = name_mapping.get('_mobius_v_0', 'unknown')
 
-                                # Search in function name, docstring, original names, and code
+                                # Search in function name, docstring, and original variable names
                                 all_original_names = ' '.join(name_mapping.values()).lower()
-                                searchable = f"{func_name} {docstring} {all_original_names} {normalized_code}".lower()
+                                searchable = f"{func_name} {docstring} {all_original_names}".lower()
 
                                 if any(term in searchable for term in search_terms):
                                     # Determine where match was found
@@ -1779,8 +1778,9 @@ def command_search(query: List[str]):
                                         match_in.append('name')
                                     if any(term in docstring.lower() for term in search_terms):
                                         match_in.append('docstring')
-                                    if not match_in:
-                                        match_in.append('code')
+                                    if any(term in all_original_names for term in search_terms):
+                                        if 'name' not in match_in:  # Don't duplicate if func name matched
+                                            match_in.append('variables')
 
                                     results.append({
                                         'hash': func_hash,
