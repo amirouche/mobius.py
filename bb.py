@@ -1442,10 +1442,11 @@ def command_remote_pull(name: str):
             print(f"Error: git fetch failed: {result.stderr}", file=sys.stderr)
             sys.exit(1)
 
-        # Merge remote changes (try main, then master)
-        result = git_run(['merge', f'{name}/main', '--no-edit'], cwd=str(git_dir))
+        # Rebase onto remote changes (try main, then master)
+        # Use rebase since content-addressed storage is append-only with zero conflicts
+        result = git_run(['rebase', f'{name}/main'], cwd=str(git_dir))
         if result.returncode != 0:
-            result = git_run(['merge', f'{name}/master', '--no-edit'], cwd=str(git_dir))
+            result = git_run(['rebase', f'{name}/master'], cwd=str(git_dir))
             if result.returncode != 0:
                 # May fail if no common history, which is fine for initial pull
                 pass
