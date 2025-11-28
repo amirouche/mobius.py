@@ -30,7 +30,7 @@ def aston_write(node: ast.AST) -> Tuple[str, List[Tuple]]:
         - all_tuples: List of (content_hash, key, index, value) tuples for this node and all descendants
     """
     all_tuples = []
-    obj = {'_type': node.__class__.__name__}
+    obj = {'__class__.__name__': node.__class__.__name__}
 
     # Process all fields and build obj for hashing
     field_data = {}
@@ -70,7 +70,7 @@ def aston_write(node: ast.AST) -> Tuple[str, List[Tuple]]:
     content_hash = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
     # Create tuples for this node
-    node_tuples = [(content_hash, '_type', None, node.__class__.__name__)]
+    node_tuples = [(content_hash, '__class__.__name__', None, node.__class__.__name__)]
 
     for field, (kind, data) in field_data.items():
         if kind == 'scalar':
@@ -129,7 +129,7 @@ def aston_read(tuples: List[Tuple]) -> ast.AST:
             return ast_nodes[hash_val]
 
         obj = objects[hash_val]
-        node_type = obj['_type']
+        node_type = obj['__class__.__name__']
 
         # Get the AST class
         ast_class = getattr(ast, node_type)
@@ -137,7 +137,7 @@ def aston_read(tuples: List[Tuple]) -> ast.AST:
         # Build fields, resolving HC references
         fields = {}
         for key, value in obj.items():
-            if key == '_type':
+            if key == '__class__.__name__':
                 continue
 
             if isinstance(value, str) and len(value) == 64 and value in objects:
@@ -163,14 +163,20 @@ def aston_read(tuples: List[Tuple]) -> ast.AST:
     # Find root node (Module)
     root_hash = None
     for hash_val, obj in objects.items():
-        if obj.get('_type') == 'Module':
+        if obj.get('__class__.__name__') == 'Module':
             root_hash = hash_val
             break
 
     if root_hash is None:
         raise ValueError("No Module node found in tuples")
 
-    return build_ast(root_hash)
+    root = build_ast(root_hash)
+
+    # Fix missing location information (lineno, col_offset, etc.)
+    # This is required for ast.unparse() and other operations
+    ast.fix_missing_locations(root)
+
+    return root
 
 
 def main():
