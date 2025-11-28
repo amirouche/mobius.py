@@ -6,12 +6,17 @@ import ast
 import argparse
 import builtins
 import hashlib
+import itertools
 import json
 import os
 import subprocess
 import sys
+import sqlite3
+import struct
+from collections import namedtuple
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Set, Tuple, List, Union
+from typing import Dict, Set, Tuple, List, Union, Any, Generator, Callable, Optional
 
 
 # Get all Python built-in names
@@ -21,6 +26,637 @@ PYTHON_BUILTINS = set(dir(builtins))
 # SHA256 hashes can start with digits (0-9), which are invalid as Python identifiers
 # By prefixing with "object_", we ensure all import names are valid
 BB_IMPORT_PREFIX = "object_"
+
+
+
+### ORDER-PRESERVING ENCODING ###
+# Minimal order-preserving encoding for tuples (stdlib only, similar to FoundationDB)
+
+# Type codes for order preservation
+_ENCODE_NULL = 0x00
+_ENCODE_BYTES = 0x01
+_ENCODE_STRING = 0x02
+_ENCODE_NESTED = 0x03
+_ENCODE_INT_ZERO = 0x04
+_ENCODE_INT_POS = 0x05
+_ENCODE_INT_NEG = 0x06
+_ENCODE_FLOAT = 0x07
+_ENCODE_TRUE = 0x08
+_ENCODE_FALSE = 0x09
+
+
+def bytes_write_one(value: Any, nested: bool = False) -> bytes:
+    """Encode a single value to bytes with order preservation.
+
+    Args:
+        value: Value to encode
+        nested: Whether this is nested inside a tuple
+
+    Returns:
+        Encoded bytes
+    """
+    if value is None:
+        return bytes([_ENCODE_NULL, 0xFF] if nested else [_ENCODE_NULL])
+    elif isinstance(value, bool):
+        return bytes([_ENCODE_TRUE if value else _ENCODE_FALSE])
+    elif isinstance(value, bytes):
+        return bytes([_ENCODE_BYTES]) + value.replace(b'\x00', b'\x00\xFF') + b'\x00'
+    elif isinstance(value, str):
+        return bytes([_ENCODE_STRING]) + value.encode('utf-8').replace(b'\x00', b'\x00\xFF') + b'\x00'
+    elif value == 0:
+        return bytes([_ENCODE_INT_ZERO])
+    elif isinstance(value, int):
+        if value > 0:
+            return bytes([_ENCODE_INT_POS]) + struct.pack('>Q', value)
+        else:
+            return bytes([_ENCODE_INT_NEG]) + struct.pack('>Q', (1 << 64) - 1 + value)
+    elif isinstance(value, float):
+        bits = struct.pack('>d', value)
+        # Flip sign bit, or flip all bits if negative
+        if bits[0] & 0x80:
+            bits = bytes(b ^ 0xFF for b in bits)
+        else:
+            bits = bytes([bits[0] ^ 0x80]) + bits[1:]
+        return bytes([_ENCODE_FLOAT]) + bits
+    elif isinstance(value, (tuple, list)):
+        return bytes([_ENCODE_NESTED]) + b''.join(bytes_write_one(v, True) for v in value) + bytes([0x00])
+    else:
+        raise ValueError(f"Unsupported type for encoding: {type(value)}")
+
+
+def bytes_read_one(data: bytes, pos: int = 0) -> Tuple[Any, int]:
+    """Decode a single value from bytes.
+
+    Args:
+        data: Encoded bytes
+        pos: Position to start decoding from
+
+    Returns:
+        Tuple of (decoded_value, next_position)
+    """
+    code = data[pos]
+    if code == _ENCODE_NULL:
+        return (None, pos + 1)
+    elif code == _ENCODE_BYTES:
+        end = pos + 1
+        while end < len(data):
+            if data[end] == 0x00 and (end + 1 >= len(data) or data[end + 1] != 0xFF):
+                break
+            end += 1 if data[end] != 0x00 else 2
+        return (data[pos + 1:end].replace(b'\x00\xFF', b'\x00'), end + 1)
+    elif code == _ENCODE_STRING:
+        end = pos + 1
+        while end < len(data):
+            if data[end] == 0x00 and (end + 1 >= len(data) or data[end + 1] != 0xFF):
+                break
+            end += 1 if data[end] != 0x00 else 2
+        return (data[pos + 1:end].replace(b'\x00\xFF', b'\x00').decode('utf-8'), end + 1)
+    elif code == _ENCODE_INT_ZERO:
+        return (0, pos + 1)
+    elif code == _ENCODE_INT_POS:
+        return (struct.unpack('>Q', data[pos + 1:pos + 9])[0], pos + 9)
+    elif code == _ENCODE_INT_NEG:
+        val = struct.unpack('>Q', data[pos + 1:pos + 9])[0]
+        return (val - ((1 << 64) - 1), pos + 9)
+    elif code == _ENCODE_FLOAT:
+        bits = bytearray(data[pos + 1:pos + 9])
+        if bits[0] & 0x80:
+            bits[0] ^= 0x80
+        else:
+            bits = bytes(b ^ 0xFF for b in bits)
+        return (struct.unpack('>d', bytes(bits))[0], pos + 9)
+    elif code == _ENCODE_TRUE:
+        return (True, pos + 1)
+    elif code == _ENCODE_FALSE:
+        return (False, pos + 1)
+    elif code == _ENCODE_NESTED:
+        result = []
+        pos += 1
+        while pos < len(data):
+            if data[pos] == 0x00:
+                if pos + 1 < len(data) and data[pos + 1] == 0xFF:
+                    result.append(None)
+                    pos += 2
+                else:
+                    break
+            else:
+                val, pos = bytes_read_one(data, pos)
+                result.append(val)
+        return (tuple(result), pos + 1)
+    else:
+        raise ValueError(f"Unknown encode type code: {code}")
+
+
+def bytes_write(items: Tuple) -> bytes:
+    """Encode a tuple to bytes with order preservation.
+
+    Args:
+        items: Tuple to encode
+
+    Returns:
+        Encoded bytes that preserve lexicographic order
+    """
+    return b''.join(bytes_write_one(item) for item in items)
+
+
+def bytes_read(data: bytes) -> Tuple:
+    """Decode bytes back to tuple.
+
+    Args:
+        data: Encoded bytes
+
+    Returns:
+        Decoded tuple
+    """
+    result = []
+    pos = 0
+    while pos < len(data):
+        val, pos = bytes_read_one(data, pos)
+        result.append(val)
+    return tuple(result)
+
+
+### SQLITE3 ORDERED KEY-VALUE STORE ###
+
+def db_open(path: str) -> sqlite3.Connection:
+    """Open a SQLite3 ordered key-value store.
+
+    Args:
+        path: Path to database file
+
+    Returns:
+        SQLite connection
+    """
+    conn = sqlite3.Connection(path)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS kv (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        )
+    ''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_key ON kv(key)')
+    conn.commit()
+    return conn
+
+
+def db_close(conn: sqlite3.Connection) -> None:
+    """Close database connection.
+
+    Args:
+        conn: SQLite connection
+    """
+    conn.close()
+
+
+def db_get(conn: sqlite3.Connection, key: bytes) -> Optional[bytes]:
+    """Get value for key.
+
+    Args:
+        conn: SQLite connection
+        key: Key to lookup
+
+    Returns:
+        Value bytes or None if not found
+    """
+    cursor = conn.execute('SELECT value FROM kv WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def db_set(conn: sqlite3.Connection, key: bytes, value: bytes) -> None:
+    """Set key-value pair.
+
+    Args:
+        conn: SQLite connection
+        key: Key bytes (max 1KB)
+        value: Value bytes (max 1MB)
+
+    Raises:
+        AssertionError: If key or value exceeds size limits
+    """
+    assert len(key) <= 1024, f"Key size {len(key)} exceeds maximum of 1024 bytes"
+    assert len(value) <= 1048576, f"Value size {len(value)} exceeds maximum of 1048576 bytes"
+    conn.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', (key, value))
+
+
+def db_delete(conn: sqlite3.Connection, key: bytes) -> None:
+    """Delete key-value pair.
+
+    Args:
+        conn: SQLite connection
+        key: Key to delete
+    """
+    conn.execute('DELETE FROM kv WHERE key = ?', (key,))
+
+
+def db_query(conn: sqlite3.Connection, key: bytes, other: bytes, offset: int = 0, limit: Optional[int] = None) -> List[Tuple[bytes, bytes]]:
+    """Query key-value pairs between key and other.
+
+    Args:
+        conn: SQLite connection
+        key: Start key (inclusive if forward, exclusive if reverse)
+        other: End key (exclusive if forward, inclusive if reverse)
+        offset: Number of results to skip
+        limit: Maximum results to return
+
+    Returns:
+        List of (key, value) tuples
+
+    Behavior:
+        - If key <= other: forward scan [key, other) in ascending order
+        - If key > other: reverse scan [other, key) in descending order, starting from biggest key < key
+    """
+    if key <= other:
+        # Forward scan: key <= k < other
+        query = 'SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ASC'
+        params: List[Any] = [key, other]
+    else:
+        # Reverse scan: other <= k < key, descending order
+        query = 'SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key DESC'
+        params = [other, key]
+
+    if limit is not None:
+        query += ' LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+    elif offset > 0:
+        query += ' OFFSET ?'
+        params.append(offset)
+
+    cursor = conn.execute(query, params)
+    return [(row[0], row[1]) for row in cursor]
+
+
+### ERDOS INDICES COMPUTATION ###
+# Compute minimal permutation indices for n-tuple store querying
+# Based on Erdős-Ko-Rado theorem and combinatorial optimization
+
+
+def erdos_indices_verify_coverage(indices: List[List[int]], n: int) -> bool:
+    """Verify that indices cover all possible query patterns.
+
+    Args:
+        indices: List of index permutations
+        n: Number of tuple elements
+
+    Returns:
+        True if all combinations are covered
+    """
+    tab = list(range(n))
+    for r in range(1, n + 1):
+        for combination in itertools.combinations(tab, r):
+            covered = False
+            for index in indices:
+                for perm in itertools.permutations(combination):
+                    if len(perm) <= len(index):
+                        if all(a == b for a, b in zip(perm, index)):
+                            covered = True
+                            break
+                if covered:
+                    break
+            if not covered:
+                return False
+    return True
+
+
+def erdos_indices(n: int) -> List[List[int]]:
+    """Compute minimal set of permutation indices for n-tuple store.
+
+    This algorithm determines which permuted indices to maintain in the database
+    to enable efficient single-hop queries for any query pattern.
+
+    Args:
+        n: Number of elements in tuples
+
+    Returns:
+        Minimal set of index permutations in lexicographic order
+
+    Example:
+        >>> erdos_indices(3)
+        [[0, 1, 2], [1, 2, 0], [2, 0, 1]]
+    """
+    tab = list(range(n))
+    cx = list(itertools.combinations(tab, n // 2))
+    out = []
+
+    for combo in cx:
+        L = [(i, i in combo) for i in tab]
+        a, b = [], []
+
+        while True:
+            # Find swap pair (inline findij logic)
+            found = False
+            for idx in range(len(L) - 1):
+                if L[idx][1] is False and L[idx + 1][1] is True:
+                    remaining = L[:idx] + L[idx + 2:]
+                    i, j = L[idx][0], L[idx + 1][0]
+                    L = remaining
+                    a.append(j)
+                    b.append(i)
+                    found = True
+                    break
+
+            if not found:
+                out.append(list(reversed(a)) + [x[0] for x in L] + list(reversed(b)))
+                break
+
+    out.sort()
+
+    # Verify coverage
+    assert erdos_indices_verify_coverage(out, n), "Generated indices do not cover all combinations"
+
+    return out
+
+
+### NSTORE TUPLE STORE ###
+# Generic tuple store database (SRFI-168 port)
+
+# Variable type for pattern matching (using namedtuple instead of class)
+Variable = namedtuple('Variable', ['name'])
+
+
+# NStore type (using namedtuple instead of class)
+NStore = namedtuple('NStore', ['prefix', 'n', 'indices'])
+
+
+def nstore_create(prefix: Tuple, n: int) -> NStore:
+    """Create an NStore instance.
+
+    Args:
+        prefix: Namespace prefix tuple (e.g., (0,) or ('blog',))
+        n: Number of elements in tuples
+
+    Returns:
+        NStore instance
+    """
+    indices = erdos_indices(n)
+    return NStore(
+        prefix=prefix,
+        n=n,
+        indices=indices
+    )
+
+
+def nstore_permute(items: Tuple, index: List[int]) -> Tuple:
+    """Permute tuple elements according to index.
+
+    Args:
+        items: Tuple to permute
+        index: Permutation specification
+
+    Returns:
+        Permuted tuple
+    """
+    return tuple(items[i] for i in index)
+
+
+def nstore_unpermute(items: Tuple, index: List[int]) -> Tuple:
+    """Reverse a permutation to get original tuple.
+
+    Args:
+        items: Permuted tuple
+        index: Permutation that was applied
+
+    Returns:
+        Original tuple
+    """
+    result = [None] * len(items)
+    for i, idx in enumerate(index):
+        result[idx] = items[i]
+    return tuple(result)
+
+
+def nstore_add(db: sqlite3.Connection, nstore: NStore, items: Tuple) -> None:
+    """Add a tuple to the nstore.
+
+    Args:
+        db: SQLite connection
+        nstore: NStore instance
+        items: Tuple to add
+    """
+    assert len(items) == nstore.n, f"Expected {nstore.n} items, got {len(items)}"
+
+    # Add to all permuted indices
+    for subspace, index in enumerate(nstore.indices):
+        permuted = nstore_permute(items, index)
+        key = bytes_write(nstore.prefix + (subspace,) + permuted)
+        db_set(db, key, b'\x01')
+
+
+def nstore_delete(db: sqlite3.Connection, nstore: NStore, items: Tuple) -> None:
+    """Delete a tuple from the nstore.
+
+    Args:
+        db: SQLite connection
+        nstore: NStore instance
+        items: Tuple to delete
+    """
+    assert len(items) == nstore.n, f"Expected {nstore.n} items, got {len(items)}"
+
+    # Delete from all permuted indices
+    for subspace, index in enumerate(nstore.indices):
+        permuted = nstore_permute(items, index)
+        key = bytes_write(nstore.prefix + (subspace,) + permuted)
+        db_delete(db, key)
+
+
+def nstore_ask(db: sqlite3.Connection, nstore: NStore, items: Tuple) -> bool:
+    """Check if a tuple exists in the nstore.
+
+    Args:
+        db: SQLite connection
+        nstore: NStore instance
+        items: Tuple to check
+
+    Returns:
+        True if tuple exists
+    """
+    assert len(items) == nstore.n, f"Expected {nstore.n} items, got {len(items)}"
+
+    # Check base index
+    key = bytes_write(nstore.prefix + (0,) + items)
+    return db_get(db, key) is not None
+
+
+def nstore_pattern_to_combination(pattern: Tuple) -> List[int]:
+    """Extract positions of non-variable elements from pattern.
+
+    Args:
+        pattern: Query pattern with Variables and concrete values
+
+    Returns:
+        List of indices where pattern has concrete values
+    """
+    return [i for i, item in enumerate(pattern) if not isinstance(item, Variable)]
+
+
+def nstore_pattern_to_index(pattern: Tuple, indices: List[List[int]]) -> Tuple[List[int], int]:
+    """Find the index and subspace that matches the pattern.
+
+    Args:
+        pattern: Query pattern
+        indices: List of available indices
+
+    Returns:
+        Tuple of (matching_index, subspace_number)
+    """
+    combination = nstore_pattern_to_combination(pattern)
+
+    for subspace, index in enumerate(indices):
+        # Check if any permutation of combination is a prefix of index
+        for perm in itertools.permutations(combination):
+            if len(perm) <= len(index) and all(a == b for a, b in zip(perm, index)):
+                return (index, subspace)
+
+    raise ValueError(f"No matching index found for pattern {pattern}")
+
+
+def nstore_pattern_to_prefix(pattern: Tuple, index: List[int]) -> Tuple:
+    """Extract the concrete prefix from pattern for range query.
+
+    Args:
+        pattern: Query pattern
+        index: Index permutation to use
+
+    Returns:
+        Tuple of concrete values in index order (up to first variable)
+    """
+    result = []
+    for idx in index:
+        value = pattern[idx]
+        if isinstance(value, Variable):
+            break
+        result.append(value)
+    return tuple(result)
+
+
+def nstore_bind_pattern(pattern: Tuple, bindings: Dict[str, Any]) -> Tuple:
+    """Replace variables in pattern with their bound values.
+
+    Args:
+        pattern: Query pattern with variables
+        bindings: Dictionary of variable names to values
+
+    Returns:
+        Pattern with variables substituted
+    """
+    return tuple(bindings[item.name] if isinstance(item, Variable) and item.name in bindings else item
+                 for item in pattern)
+
+
+def nstore_bind_tuple(pattern: Tuple, tuple_items: Tuple, seed: Dict[str, Any]) -> Dict[str, Any]:
+    """Bind variables in pattern to values from matching tuple.
+
+    Args:
+        pattern: Query pattern with variables
+        tuple_items: Concrete tuple from database
+        seed: Existing bindings to extend
+
+    Returns:
+        New bindings dictionary with variables bound
+    """
+    result = dict(seed)
+    for pattern_item, tuple_item in zip(pattern, tuple_items):
+        if isinstance(pattern_item, Variable):
+            result[pattern_item.name] = tuple_item
+    return result
+
+
+def nstore_query(db: sqlite3.Connection, nstore: NStore, pattern: Tuple, *patterns: Tuple) -> List[Dict[str, Any]]:
+    """Query tuples matching pattern and optional additional where patterns.
+
+    Args:
+        db: SQLite connection
+        nstore: NStore instance
+        pattern: Initial query pattern (tuple with var and concrete values)
+        *patterns: Additional where patterns for joins
+
+    Returns:
+        List of dictionaries mapping variable names to values. Caller can slice
+        the result for pagination (e.g., results[offset:offset+limit]).
+
+    Example:
+        # Simple query
+        for binding in nstore_query(db, store, ('P4X432', 'blog/title', Variable('title'))):
+            print(binding['title'])
+
+        # Multi-hop join
+        for binding in nstore_query(
+            db, store,
+            (Variable('blog_uid'), 'blog/title', 'hyper.dev'),
+            (Variable('post_uid'), 'post/blog', Variable('blog_uid')),
+            (Variable('post_uid'), 'post/title', Variable('post_title'))
+        ):
+            print(binding['post_title'])
+
+        # Pagination
+        results = nstore_query(db, store, ('P4X432', 'blog/title', Variable('title')))
+        page = results[20:40]  # Skip 20, take 20
+    """
+    patterns = [pattern] + list(patterns)
+
+    # Start with initial empty binding
+    bindings = [{}]
+
+    # Process each pattern
+    for pat in patterns:
+        assert len(pat) == nstore.n, f"Pattern length {len(pat)} doesn't match nstore size {nstore.n}"
+
+        new_bindings = []
+
+        for binding in bindings:
+            # Bind variables in pattern with current bindings
+            bound_pattern = nstore_bind_pattern(pat, binding)
+
+            # Find matching index
+            index, subspace = nstore_pattern_to_index(bound_pattern, nstore.indices)
+
+            # Build prefix for range query
+            prefix_items = nstore_pattern_to_prefix(bound_pattern, index)
+            key_start = bytes_write(nstore.prefix + (subspace,) + prefix_items)
+            key_end = key_start[:-1] + bytes([key_start[-1] + 1]) if key_start else b'\xFF'
+
+            # Range scan
+            results = db_query(db, key_start, key_end)
+
+            for key, _ in results:
+                # Decode key
+                unpacked = bytes_read(key)
+
+                # Extract tuple (skip prefix + subspace)
+                permuted_tuple = unpacked[len(nstore.prefix) + 1:]
+
+                # Reverse permutation
+                original_tuple = nstore_unpermute(permuted_tuple, index)
+
+                # Bind variables from pattern
+                new_binding = nstore_bind_tuple(pat, original_tuple, binding)
+                new_bindings.append(new_binding)
+
+        bindings = new_bindings
+
+    return bindings
+
+
+@contextmanager
+def db_transaction(db: sqlite3.Connection) -> Generator[sqlite3.Connection, None, None]:
+    """Context manager for database transactions.
+
+    Args:
+        db: SQLite connection
+
+    Yields:
+        SQLite connection within transaction
+
+    Example:
+        with db_transaction(db):
+            nstore_add(db, store, ('a', 'b', 'c'))
+    """
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def check(target):
