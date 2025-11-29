@@ -50,7 +50,10 @@ jobs:
         echo "========================================"
         echo "Quick Generative Fuzzing"
         echo "========================================"
-        python3 tests/aston/fuzz.py --generative --tests 100 --seed 0
+        SEED=$(python3 -c "import random; print(random.randint(0, 999999))")
+        echo "Using random seed: $SEED"
+        echo "To reproduce: python3 tests/aston/fuzz.py --generative --tests 100 --seed $SEED"
+        python3 tests/aston/fuzz.py --generative --tests 100 --seed $SEED
 
     - name: Fuzzing Summary
       if: always()
