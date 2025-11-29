@@ -34,6 +34,10 @@ BB_IMPORT_PREFIX = "object_"
 ### ORDER-PRESERVING ENCODING ###
 # Minimal order-preserving encoding for tuples (stdlib only, similar to FoundationDB)
 
+# BBH (Beyond Babel Hash) type for content-addressed references
+# Stores a SHA256 hash (32 bytes) for referencing pool functions or ASTON nodes
+BBH = namedtuple('BBH', ['value'])
+
 # Type codes for order preservation
 _ENCODE_NULL = 0x00
 _ENCODE_BYTES = 0x01
@@ -46,6 +50,7 @@ _ENCODE_FLOAT = 0x07
 _ENCODE_TRUE = 0x08
 _ENCODE_FALSE = 0x09
 _ENCODE_UUID = 0x0A
+_ENCODE_BBH = 0x0B
 
 
 def bytes_write_one(value: Any, nested: bool = False) -> bytes:
@@ -85,6 +90,19 @@ def bytes_write_one(value: Any, nested: bool = False) -> bytes:
         # UUIDs are stored as 16 bytes (128 bits)
         # UUID.bytes maintains lexicographic ordering for ULIDs
         return bytes([_ENCODE_UUID]) + value.bytes
+    elif isinstance(value, BBH):
+        # BBH stores a SHA256 hash (32 bytes)
+        # value can be bytes or hex string
+        if isinstance(value.value, bytes):
+            if len(value.value) != 32:
+                raise ValueError(f"BBH bytes must be exactly 32 bytes, got {len(value.value)}")
+            return bytes([_ENCODE_BBH]) + value.value
+        elif isinstance(value.value, str):
+            if len(value.value) != 64:
+                raise ValueError(f"BBH hex string must be exactly 64 characters, got {len(value.value)}")
+            return bytes([_ENCODE_BBH]) + bytes.fromhex(value.value)
+        else:
+            raise ValueError(f"BBH value must be bytes or hex string, got {type(value.value)}")
     elif isinstance(value, (tuple, list)):
         return bytes([_ENCODE_NESTED]) + b''.join(bytes_write_one(v, True) for v in value) + bytes([0x00])
     else:
@@ -139,6 +157,11 @@ def bytes_read_one(data: bytes, pos: int = 0) -> Tuple[Any, int]:
     elif code == _ENCODE_UUID:
         # UUIDs are stored as 16 bytes (128 bits)
         return (uuid.UUID(bytes=data[pos + 1:pos + 17]), pos + 17)
+    elif code == _ENCODE_BBH:
+        # BBH stores a SHA256 hash (32 bytes)
+        # Return as hex string for easier use
+        hash_bytes = data[pos + 1:pos + 33]
+        return (BBH(hash_bytes.hex()), pos + 33)
     elif code == _ENCODE_NESTED:
         result = []
         pos += 1
