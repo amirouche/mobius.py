@@ -1404,8 +1404,7 @@ def code_detect_schema(func_hash: str) -> int:
     """
     Detect the schema version of a stored function.
 
-    Checks the filesystem to determine if a function is stored in v1 format:
-    - v1: $BB_DIRECTORY/objects/sha256/XX/YYYYYY.../object.json
+    Checks the database to determine if a function exists.
 
     Args:
         func_hash: The function hash to check
@@ -1413,13 +1412,13 @@ def code_detect_schema(func_hash: str) -> int:
     Returns:
         1 for v1 format, None if function not found
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
-    # Check for v1 format (function directory with object.json)
-    v1_func_dir = pool_dir / func_hash[:2] / func_hash[2:]
-    v1_object_json = v1_func_dir / 'object.json'
+    # Check for function in database
+    key = bytes_write(('code', BBH(func_hash)))
+    value = db_get(db, key)
 
-    if v1_object_json.exists():
+    if value is not None:
         return 1
 
     # Function not found
@@ -1495,6 +1494,55 @@ def storage_get_pool_directory() -> Path:
     Returns: $BB_DIRECTORY/pool/
     """
     return storage_get_bb_directory() / 'pool'
+
+
+def storage_get_db_path() -> Path:
+    """
+    Get the path to the SQLite database file.
+    Returns: $BB_DIRECTORY/bb.db
+    """
+    return storage_get_bb_directory() / 'bb.db'
+
+
+# Global database connection cache
+_db_connection: Optional[sqlite3.Connection] = None
+
+
+def storage_open_db() -> sqlite3.Connection:
+    """
+    Open (or return cached) the bb SQLite database.
+
+    Creates the database file and parent directories if they don't exist.
+    Uses a global connection cache for efficiency.
+
+    Returns:
+        SQLite connection to the bb database
+    """
+    global _db_connection
+
+    if _db_connection is not None:
+        return _db_connection
+
+    db_path = storage_get_db_path()
+
+    # Create parent directory if it doesn't exist
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    _db_connection = db_open(str(db_path))
+    return _db_connection
+
+
+def storage_close_db() -> None:
+    """
+    Close the cached database connection.
+
+    Should be called when done with database operations.
+    """
+    global _db_connection
+
+    if _db_connection is not None:
+        db_close(_db_connection)
+        _db_connection = None
 
 
 def storage_get_git_directory() -> Path:
@@ -1643,35 +1691,32 @@ def command_whoami(subcommand: str, value: list = None):
 
 def code_save_v1(hash_value: str, normalized_code: str, metadata: Dict[str, any]):
     """
-    Save function to bb directory using schema v1.
+    Save function to bb database using schema v1.
 
-    Creates the function directory and object.json file:
-    - Directory: $BB_DIRECTORY/pool/sha256/XX/YYYYYY.../
-    - File: $BB_DIRECTORY/pool/sha256/XX/YYYYYY.../object.json
+    Stores function data in SQLite with key ('code', BBH(hash)).
 
     Args:
         hash_value: Function hash (64-character hex)
         normalized_code: Normalized code with docstring
         metadata: Metadata dict (created, author)
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
-    # Create function directory: pool/XX/YYYYYY.../
-    func_dir = pool_dir / hash_value[:2] / hash_value[2:]
-    func_dir.mkdir(parents=True, exist_ok=True)
+    # Create key: ('code', BBH(hash_value))
+    key = bytes_write(('code', BBH(hash_value)))
 
-    # Create object.json
-    object_json = func_dir / 'object.json'
-
+    # Create value as JSON
     data = {
         'schema_version': 1,
         'hash': hash_value,
         'normalized_code': normalized_code,
         'metadata': metadata
     }
+    value = json.dumps(data, ensure_ascii=False).encode('utf-8')
 
-    with open(object_json, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    # Store in database
+    db_set(db, key, value)
+    db.commit()
 
     print(f"Hash: {hash_value}")
 
@@ -1680,11 +1725,9 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
                    name_mapping: Dict[str, str], alias_mapping: Dict[str, str],
                    comment: str = "") -> str:
     """
-    Save language mapping to bb directory using schema v1.
+    Save language mapping to bb database using schema v1.
 
-    Creates the mapping directory and mapping.json file:
-    - Directory: $BB_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../
-    - File: $BB_DIRECTORY/objects/sha256/XX/Y.../lang/sha256/ZZ/W.../mapping.json
+    Stores mapping data in SQLite with key ('mapping', BBH(func_hash), lang, BBH(mapping_hash)).
 
     The mapping is content-addressed, enabling deduplication.
 
@@ -1699,28 +1742,26 @@ def mapping_save_v1(func_hash: str, lang: str, docstring: str,
     Returns:
         Mapping hash (64-character hex)
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
     # Compute mapping hash
     mapping_hash = code_compute_mapping_hash(docstring, name_mapping, alias_mapping, comment)
 
-    # Create mapping directory: pool/XX/Y.../lang/ZZ/W.../
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
-    mapping_dir = func_dir / lang / mapping_hash[:2] / mapping_hash[2:]
-    mapping_dir.mkdir(parents=True, exist_ok=True)
+    # Create key: ('mapping', BBH(func_hash), lang, BBH(mapping_hash))
+    key = bytes_write(('mapping', BBH(func_hash), lang, BBH(mapping_hash)))
 
-    # Create mapping.json
-    mapping_json = mapping_dir / 'mapping.json'
-
+    # Create value as JSON
     data = {
         'docstring': docstring,
         'name_mapping': name_mapping,
         'alias_mapping': alias_mapping,
         'comment': comment
     }
+    value = json.dumps(data, ensure_ascii=False).encode('utf-8')
 
-    with open(mapping_json, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    # Store in database
+    db_set(db, key, value)
+    db.commit()
 
     print(f"Mapping hash: {mapping_hash}")
 
@@ -3222,16 +3263,27 @@ def storage_list_languages(func_hash: str) -> list:
     Returns:
         List of language codes available for this function
     """
-    pool_dir = storage_get_pool_directory()
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
+    db = storage_open_db()
 
-    if not func_dir.exists():
+    # Create prefix key: ('mapping', BBH(func_hash))
+    prefix = bytes_write(('mapping', BBH(func_hash)))
+    prefix_end = bytes_next(prefix)
+
+    if prefix_end is None:
         return []
 
-    languages = []
-    for item in func_dir.iterdir():
-        if item.is_dir() and len(item.name) >= 3 and len(item.name) <= 256:
-            languages.append(item.name)
+    # Query all mappings with this prefix
+    results = db_query(db, prefix, prefix_end)
+
+    # Extract unique languages
+    languages = set()
+    for key_bytes, _ in results:
+        key_tuple = bytes_read(key_bytes)
+        # key_tuple is ('mapping', BBH(func_hash), lang, BBH(mapping_hash))
+        if len(key_tuple) >= 3:
+            lang = key_tuple[2]
+            if isinstance(lang, str) and len(lang) >= 3 and len(lang) <= 256:
+                languages.add(lang)
 
     return sorted(languages)
 
@@ -3603,9 +3655,9 @@ def code_replace_docstring(code: str, new_docstring: str) -> str:
 
 def code_load_v1(hash_value: str) -> Dict[str, any]:
     """
-    Load function from bb directory using schema v1.
+    Load function from bb database using schema v1.
 
-    Loads only the object.json file (no language-specific data).
+    Loads function data from SQLite.
 
     Args:
         hash_value: Function hash (64-character hex)
@@ -3613,23 +3665,23 @@ def code_load_v1(hash_value: str) -> Dict[str, any]:
     Returns:
         Dictionary with schema_version, hash, normalized_code, metadata
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
-    # Build path: pool/XX/YYYYYY.../object.json
-    func_dir = pool_dir / hash_value[:2] / hash_value[2:]
-    object_json = func_dir / 'object.json'
+    # Create key: ('code', BBH(hash_value))
+    key = bytes_write(('code', BBH(hash_value)))
 
-    # Check if file exists
-    if not object_json.exists():
+    # Get from database
+    value = db_get(db, key)
+
+    if value is None:
         print(f"Error: Function not found (v1): {hash_value}", file=sys.stderr)
         sys.exit(1)
 
-    # Load the JSON data
+    # Parse JSON data
     try:
-        with open(object_json, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = json.loads(value.decode('utf-8'))
     except json.JSONDecodeError as e:
-        print(f"Error: Failed to parse object.json: {e}", file=sys.stderr)
+        print(f"Error: Failed to parse stored data: {e}", file=sys.stderr)
         sys.exit(1)
 
     return data
@@ -3639,7 +3691,7 @@ def mappings_list_v1(func_hash: str, lang: str) -> list:
     """
     List all mapping variants for a given function and language.
 
-    Scans the language directory and returns all available mappings.
+    Queries the database for all mappings matching the function hash and language.
 
     Args:
         func_hash: Function hash (64-character hex)
@@ -3648,45 +3700,34 @@ def mappings_list_v1(func_hash: str, lang: str) -> list:
     Returns:
         List of (mapping_hash, comment) tuples
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
-    # Build path: pool/XX/YYYYYY.../lang/
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
-    lang_dir = func_dir / lang
+    # Create prefix key: ('mapping', BBH(func_hash), lang)
+    prefix = bytes_write(('mapping', BBH(func_hash), lang))
+    prefix_end = bytes_next(prefix)
 
-    # Check if language directory exists
-    if not lang_dir.exists():
+    if prefix_end is None:
         return []
 
-    # Scan for mapping directories: lang/ZZ/WWWW.../mapping.json
+    # Query all mappings with this prefix
+    results = db_query(db, prefix, prefix_end)
+
     mappings = []
+    for key_bytes, value_bytes in results:
+        # Decode the key to extract mapping hash
+        key_tuple = bytes_read(key_bytes)
+        # key_tuple is ('mapping', BBH(func_hash), lang, BBH(mapping_hash))
+        if len(key_tuple) >= 4:
+            mapping_bbh = key_tuple[3]
+            mapping_hash = mapping_bbh.value if isinstance(mapping_bbh, BBH) else str(mapping_bbh)
 
-    # Iterate through hash prefix directories (ZZ/)
-    for hash_prefix_dir in lang_dir.iterdir():
-        if not hash_prefix_dir.is_dir():
-            continue
-
-        # Iterate through full hash directories (WWWW.../)
-        for mapping_hash_dir in hash_prefix_dir.iterdir():
-            if not mapping_hash_dir.is_dir():
-                continue
-
-            # Check if mapping.json exists
-            mapping_json = mapping_hash_dir / 'mapping.json'
-            if not mapping_json.exists():
-                continue
-
-            # Reconstruct mapping hash from path
-            mapping_hash = hash_prefix_dir.name + mapping_hash_dir.name
-
-            # Load mapping to get comment
+            # Parse value to get comment
             try:
-                with open(mapping_json, 'r', encoding='utf-8') as f:
-                    mapping_data = json.load(f)
-                comment = mapping_data.get('comment', '')
+                data = json.loads(value_bytes.decode('utf-8'))
+                comment = data.get('comment', '')
                 mappings.append((mapping_hash, comment))
-            except (json.JSONDecodeError, IOError):
-                # Skip invalid mapping files
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # Skip invalid entries
                 continue
 
     return mappings
@@ -3704,24 +3745,23 @@ def mapping_load_v1(func_hash: str, lang: str, mapping_hash: str) -> Tuple[str, 
     Returns:
         Tuple of (docstring, name_mapping, alias_mapping, comment)
     """
-    pool_dir = storage_get_pool_directory()
+    db = storage_open_db()
 
-    # Build path: pool/XX/Y.../lang/ZZ/W.../mapping.json
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
-    mapping_dir = func_dir / lang / mapping_hash[:2] / mapping_hash[2:]
-    mapping_json = mapping_dir / 'mapping.json'
+    # Create key: ('mapping', BBH(func_hash), lang, BBH(mapping_hash))
+    key = bytes_write(('mapping', BBH(func_hash), lang, BBH(mapping_hash)))
 
-    # Check if file exists
-    if not mapping_json.exists():
+    # Get from database
+    value = db_get(db, key)
+
+    if value is None:
         print(f"Error: Mapping not found: {func_hash}@{lang} (mapping hash: {mapping_hash})", file=sys.stderr)
         sys.exit(1)
 
-    # Load the JSON data
+    # Parse JSON data
     try:
-        with open(mapping_json, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = json.loads(value.decode('utf-8'))
     except json.JSONDecodeError as e:
-        print(f"Error: Failed to parse mapping.json: {e}", file=sys.stderr)
+        print(f"Error: Failed to parse stored mapping: {e}", file=sys.stderr)
         sys.exit(1)
 
     docstring = data.get('docstring', '')

@@ -1,7 +1,7 @@
 """
-Tests for storage functions (Schema v1 write/read path).
+Tests for storage functions (Schema v1 write/read path with SQLite).
 
-Tests for saving and loading functions in v1 format.
+Tests for saving and loading functions in v1 format using SQLite storage.
 """
 import json
 
@@ -15,8 +15,8 @@ from tests.conftest import normalize_code_for_test
 # Tests for V1 Write Path
 # ============================================================================
 
-def test_function_save_v1_creates_object_json(mock_bb_dir):
-    """Test that function_save_v1 creates proper object.json"""
+def test_function_save_v1_stores_in_database(mock_bb_dir):
+    """Test that function_save_v1 stores data in SQLite database"""
     test_hash = "abcd1234" + "0" * 56
     normalized_code = normalize_code_for_test("def _bb_v_0(): pass")
     metadata = {
@@ -27,17 +27,15 @@ def test_function_save_v1_creates_object_json(mock_bb_dir):
 
     bb.code_save_v1(test_hash, normalized_code, metadata)
 
-    # Check that object.json was created
-    pool_dir = mock_bb_dir / '.bb' / 'pool'
-    func_dir = pool_dir / test_hash[:2] / test_hash[2:]
-    object_json = func_dir / 'object.json'
+    # Check that data was stored in database
+    db = bb.storage_open_db()
+    key = bb.bytes_write(('code', bb.BBH(test_hash)))
+    value = bb.db_get(db, key)
 
-    assert object_json.exists()
+    assert value is not None
 
-    # Load and verify structure
-    with open(object_json, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
+    # Parse and verify structure
+    data = json.loads(value.decode('utf-8'))
     assert data['schema_version'] == 1
     assert data['hash'] == test_hash
     assert data['normalized_code'] == normalized_code
@@ -52,12 +50,10 @@ def test_function_save_v1_no_language_data(mock_bb_dir):
 
     bb.code_save_v1(test_hash, normalized_code, metadata)
 
-    pool_dir = mock_bb_dir / '.bb' / 'pool'
-    func_dir = pool_dir / test_hash[:2] / test_hash[2:]
-    object_json = func_dir / 'object.json'
-
-    with open(object_json, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    db = bb.storage_open_db()
+    key = bb.bytes_write(('code', bb.BBH(test_hash)))
+    value = bb.db_get(db, key)
+    data = json.loads(value.decode('utf-8'))
 
     # Should NOT have docstrings, name_mappings, alias_mappings
     assert 'docstrings' not in data
@@ -65,8 +61,8 @@ def test_function_save_v1_no_language_data(mock_bb_dir):
     assert 'alias_mappings' not in data
 
 
-def test_mapping_save_v1_creates_mapping_json(mock_bb_dir):
-    """Test that mapping_save_v1 creates proper mapping.json"""
+def test_mapping_save_v1_stores_in_database(mock_bb_dir):
+    """Test that mapping_save_v1 stores data in SQLite database"""
     func_hash = "abcd1234" + "0" * 56
     lang = "eng"
     docstring = "Test function"
@@ -74,7 +70,7 @@ def test_mapping_save_v1_creates_mapping_json(mock_bb_dir):
     alias_mapping = {}
     comment = "Test variant"
 
-    # First create the function (object.json must exist)
+    # First create the function
     normalized_code = normalize_code_for_test("def _bb_v_0(): pass")
     metadata = bb.code_create_metadata()
     bb.code_save_v1(func_hash, normalized_code, metadata)
@@ -82,18 +78,15 @@ def test_mapping_save_v1_creates_mapping_json(mock_bb_dir):
     # Now save the mapping
     mapping_hash = bb.mapping_save_v1(func_hash, lang, docstring, name_mapping, alias_mapping, comment)
 
-    # Check that mapping.json was created
-    pool_dir = mock_bb_dir / '.bb' / 'pool'
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
-    mapping_dir = func_dir / lang / mapping_hash[:2] / mapping_hash[2:]
-    mapping_json = mapping_dir / 'mapping.json'
+    # Check that mapping was stored in database
+    db = bb.storage_open_db()
+    key = bb.bytes_write(('mapping', bb.BBH(func_hash), lang, bb.BBH(mapping_hash)))
+    value = bb.db_get(db, key)
 
-    assert mapping_json.exists()
+    assert value is not None
 
-    # Load and verify structure
-    with open(mapping_json, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
+    # Parse and verify structure
+    data = json.loads(value.decode('utf-8'))
     assert data['docstring'] == docstring
     assert data['name_mapping'] == name_mapping
     assert data['alias_mapping'] == alias_mapping
@@ -125,7 +118,7 @@ def test_mapping_save_v1_returns_hash(mock_bb_dir):
 
 
 def test_mapping_save_v1_deduplication(mock_bb_dir):
-    """Test that identical mappings share the same file (deduplication)"""
+    """Test that identical mappings produce the same hash (idempotent storage)"""
     func_hash1 = "aaaa" + "0" * 60
     func_hash2 = "bbbb" + "0" * 60
     lang = "eng"
@@ -166,8 +159,8 @@ def test_mapping_save_v1_different_comments_different_hashes(mock_bb_dir):
 
 
 def test_v1_write_integration_full_structure(mock_bb_dir):
-    """Integration test: verify complete v1 directory structure"""
-    func_hash = "test1234" + "0" * 56
+    """Integration test: verify complete v1 storage structure"""
+    func_hash = "1234abcd" + "0" * 56
     normalized_code = normalize_code_for_test("def _bb_v_0(_bb_v_1): return _bb_v_1 * 2")
     metadata = {
         'created': '2025-01-01T00:00:00Z',
@@ -197,28 +190,28 @@ def test_v1_write_integration_full_structure(mock_bb_dir):
         "Français simple"
     )
 
-    # Verify directory structure
-    pool_dir = mock_bb_dir / '.bb' / 'pool'
-    func_dir = pool_dir / func_hash[:2] / func_hash[2:]
+    # Verify all data in database
+    db = bb.storage_open_db()
 
-    # Check object.json exists
-    assert (func_dir / 'object.json').exists()
+    # Check function exists
+    code_key = bb.bytes_write(('code', bb.BBH(func_hash)))
+    assert bb.db_get(db, code_key) is not None
 
-    # Check language directories exist
-    assert (func_dir / 'eng').exists()
-    assert (func_dir / 'fra').exists()
+    # Check English mapping exists
+    eng_key = bb.bytes_write(('mapping', bb.BBH(func_hash), 'eng', bb.BBH(eng_hash)))
+    assert bb.db_get(db, eng_key) is not None
 
-    # Check mapping files exist
-    assert (func_dir / 'eng' / eng_hash[:2] / eng_hash[2:] / 'mapping.json').exists()
-    assert (func_dir / 'fra' / fra_hash[:2] / fra_hash[2:] / 'mapping.json').exists()
+    # Check French mapping exists
+    fra_key = bb.bytes_write(('mapping', bb.BBH(func_hash), 'fra', bb.BBH(fra_hash)))
+    assert bb.db_get(db, fra_key) is not None
 
 
 # ============================================================================
 # Tests for V1 Read Path
 # ============================================================================
 
-def test_function_load_v1_loads_object_json(mock_bb_dir):
-    """Test that function_load_v1 loads object.json correctly"""
+def test_function_load_v1_loads_from_database(mock_bb_dir):
+    """Test that function_load_v1 loads data from SQLite correctly"""
     func_hash = "test5678" + "0" * 56
     normalized_code = normalize_code_for_test("def _bb_v_0(_bb_v_1): return _bb_v_1 * 2")
     metadata = {
@@ -387,3 +380,79 @@ def test_function_load_dispatch_explicit_mapping(mock_bb_dir):
     assert loaded_code == normalized_code
     assert loaded_name == {"_bb_v_0": "func2"}
     assert loaded_doc == "Doc 2"
+
+
+# ============================================================================
+# Tests for storage_list_languages
+# ============================================================================
+
+def test_storage_list_languages_single_language(mock_bb_dir):
+    """Test listing languages when only one language exists"""
+    func_hash = "lang1234" + "0" * 56
+    normalized_code = normalize_code_for_test("def _bb_v_0(): pass")
+
+    # Create function with one language
+    bb.code_save_v1(func_hash, normalized_code, bb.code_create_metadata())
+    bb.mapping_save_v1(func_hash, "eng", "Test", {"_bb_v_0": "test"}, {}, "")
+
+    # List languages
+    languages = bb.storage_list_languages(func_hash)
+
+    assert languages == ["eng"]
+
+
+def test_storage_list_languages_multiple_languages(mock_bb_dir):
+    """Test listing languages when multiple languages exist"""
+    func_hash = "lang5678" + "0" * 56
+    normalized_code = normalize_code_for_test("def _bb_v_0(): pass")
+
+    # Create function with multiple languages
+    bb.code_save_v1(func_hash, normalized_code, bb.code_create_metadata())
+    bb.mapping_save_v1(func_hash, "eng", "English", {"_bb_v_0": "test"}, {}, "")
+    bb.mapping_save_v1(func_hash, "fra", "Français", {"_bb_v_0": "tester"}, {}, "")
+    bb.mapping_save_v1(func_hash, "spa", "Español", {"_bb_v_0": "probar"}, {}, "")
+
+    # List languages
+    languages = bb.storage_list_languages(func_hash)
+
+    assert languages == ["eng", "fra", "spa"]
+
+
+def test_storage_list_languages_no_mappings(mock_bb_dir):
+    """Test listing languages when no mappings exist"""
+    func_hash = "nolang12" + "0" * 56
+
+    # Don't create any mappings
+
+    # List languages
+    languages = bb.storage_list_languages(func_hash)
+
+    assert languages == []
+
+
+# ============================================================================
+# Tests for code_detect_schema
+# ============================================================================
+
+def test_code_detect_schema_exists(mock_bb_dir):
+    """Test that code_detect_schema returns 1 for existing function"""
+    func_hash = "detect12" + "0" * 56
+    normalized_code = normalize_code_for_test("def _bb_v_0(): pass")
+
+    # Create function
+    bb.code_save_v1(func_hash, normalized_code, bb.code_create_metadata())
+
+    # Check detection
+    version = bb.code_detect_schema(func_hash)
+
+    assert version == 1
+
+
+def test_code_detect_schema_not_found(mock_bb_dir):
+    """Test that code_detect_schema returns None for non-existent function"""
+    func_hash = "notfound" + "0" * 56
+
+    # Check detection
+    version = bb.code_detect_schema(func_hash)
+
+    assert version is None

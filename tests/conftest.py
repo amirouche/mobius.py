@@ -145,20 +145,23 @@ def mock_bb_dir(tmp_path, monkeypatch):
 
     Directory structure:
         tmp_path/.bb/
-        ├── pool/          # Pool directory
+        ├── bb.db          # SQLite database
         └── config.json    # Configuration file
     """
     base_dir = tmp_path / '.bb'
-    pool_dir = base_dir / 'pool'
+    db_path = base_dir / 'bb.db'
 
     def _get_temp_bb_dir():
         return base_dir
 
-    def _get_temp_pool_dir():
-        return pool_dir
+    def _get_temp_db_path():
+        return db_path
+
+    # Reset global database connection
+    bb._db_connection = None
 
     monkeypatch.setattr(bb, 'storage_get_bb_directory', _get_temp_bb_dir)
-    monkeypatch.setattr(bb, 'storage_get_pool_directory', _get_temp_pool_dir)
+    monkeypatch.setattr(bb, 'storage_get_db_path', _get_temp_db_path)
     return tmp_path
 
 
